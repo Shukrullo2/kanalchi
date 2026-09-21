@@ -55,5 +55,17 @@
     "thinking": "arxivdan qidirilmoqda",
     "disabled": "Bu kanal uchun yordamchi o'chirilgan.",
     "sources": "Manbalar"
+  },
+  "research": {
+    "placeholder": "O'z arxivingiz haqida so'rang…",
+    "intro": "Nimani yoritgansiz, qayerda bo'shliq bor va keyin nima yozish kerakligini so'rang. Faqat o'z postlaringiz asosida.",
+    "send": "So'rash",
+    "thinking": "arxivingiz o'qilmoqda",
+    "disabled": "Mavjud emas.",
+    "sources": "Sizning postlaringiz",
+    "gaps": "Oxirgi paytda nimani yoritmadim?",
+    "covered": "Bu oyda nima chop etdim?",
+    "popular": "Bu yilgi eng yaxshi postlarim qaysi?",
+    "quiet": "Qaysi mavzular jimib qoldi?"
   }
 }

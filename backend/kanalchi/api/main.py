@@ -7,7 +7,17 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import ORJSONResponse
 
-from kanalchi.api.routers import admin, auth, chat, internal, onboarding, tags, viewer, webhooks
+from kanalchi.api.routers import (
+    admin,
+    auth,
+    chat,
+    internal,
+    onboarding,
+    studio,
+    tags,
+    viewer,
+    webhooks,
+)
 from kanalchi.core.db import dispose_engine
 from kanalchi.core.logging import configure_logging, get_logger
 from kanalchi.core.redis import close_redis
@@ -44,6 +54,7 @@ app.include_router(onboarding.router)
 app.include_router(viewer.router)
 app.include_router(tags.router)
 app.include_router(chat.router)
+app.include_router(studio.router)
 app.include_router(webhooks.router)
 
 

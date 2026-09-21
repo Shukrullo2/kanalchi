@@ -1,12 +1,19 @@
 import { getTranslations } from "next-intl/server";
-import { SignOut } from "@/components/SignOut";
+import { StudioNav } from "@/components/studio/StudioNav";
 import { TelegramLogin } from "@/components/TelegramLogin";
 import { apiFetch } from "@/lib/api";
 import { getMe } from "@/lib/auth";
 import type { TenantPublic } from "@/lib/types";
 
+export const metadata = { title: "Studio", robots: { index: false } };
+
 export default async function StudioLayout({ children }: { children: React.ReactNode }) {
-  const [me, tenant, t, tc] = await Promise.all([getMe(), apiFetch<TenantPublic>("/api/tenant"), getTranslations("studio"), getTranslations("common")]);
+  const [me, tenant, t] = await Promise.all([
+    getMe(),
+    apiFetch<TenantPublic>("/api/tenant"),
+    getTranslations("studio"),
+  ]);
+
   if (!me.authenticated || (me.role !== "owner" && me.role !== "editor")) {
     return (
       <div className="card-surface mx-auto max-w-md space-y-4 p-8 text-center">
@@ -16,15 +23,14 @@ export default async function StudioLayout({ children }: { children: React.React
       </div>
     );
   }
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold tracking-tight">{t("title")}</h1>
-        <div className="flex items-center gap-3 text-sm">
-          <span>{me.name}</span>
-          <SignOut label={tc("signOut")} />
-        </div>
+        <span className="text-xs text-muted-foreground">{me.name}</span>
       </div>
+      <StudioNav />
       {children}
     </div>
   );

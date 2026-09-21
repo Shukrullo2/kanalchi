@@ -193,3 +193,62 @@ export type ChatTurn = {
 };
 
 export type ChatSuggestions = { suggestions: string[]; enabled: boolean };
+
+export type IdeaOut = {
+  id: number;
+  title: string;
+  body: string;
+  status: "inbox" | "researching" | "drafting" | "scheduled" | "published" | "dropped";
+  position: number;
+  related_post_ids: number[];
+  created_at: string;
+};
+
+export type DraftOut = {
+  id: number;
+  idea_id: number | null;
+  title: string;
+  html: string;
+  media: { upload_id?: number; object_key?: string; kind?: string; url?: string }[];
+  status: "draft" | "scheduled" | "publishing" | "published" | "failed" | "canceled";
+  scheduled_at: string | null;
+  published_tg_message_id: number | null;
+  published_at: string | null;
+  publish_error: string | null;
+  suggested_tags: TagOut[];
+  ai_generated: boolean;
+  length: number;
+  updated_at: string;
+};
+
+export type StudioOverview = {
+  posts: number;
+  subscribers: number | null;
+  drafts: Record<string, number>;
+  ideas: Record<string, number>;
+  pending_tags: number;
+  spend_today_usd: number;
+  studio_budget_usd: number;
+  studio_spent_usd: number;
+  has_voice_profile: boolean;
+  bot_username: string | null;
+};
+
+export type PendingTag = {
+  id: number;
+  name: string;
+  dimension: string;
+  count: number;
+  surface_forms: string[];
+  sample_post_ids: number[];
+};
+
+export type StudioSettings = {
+  chat_enabled: boolean;
+  chat_persona: string | null;
+  voice_profile: Record<string, unknown> | null;
+  channel_profile: Record<string, unknown> | null;
+  bot_username: string | null;
+  webhook_ready: boolean;
+  locales: string[];
+};

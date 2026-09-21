@@ -55,5 +55,17 @@
     "thinking": "looking through the archive",
     "disabled": "The assistant is turned off for this channel.",
     "sources": "Sources"
+  },
+  "research": {
+    "placeholder": "Ask about your own archive…",
+    "intro": "Ask what you have already covered, where the gaps are, or what to write next. Grounded in your own posts.",
+    "send": "Ask",
+    "thinking": "reading your archive",
+    "disabled": "Unavailable.",
+    "sources": "Your posts",
+    "gaps": "What have I not covered lately?",
+    "covered": "What did I publish this month?",
+    "popular": "Which of my posts performed best this year?",
+    "quiet": "Which topics have gone quiet?"
   }
 }
