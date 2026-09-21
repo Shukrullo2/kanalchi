@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { SparkIcon } from "@/components/Icons";
-import { StatusDot } from "@/components/admin/StatusDot";
+import { State } from "@/components/admin/StatusDot";
 import { apiFetch } from "@/lib/api";
 import type { AdminTenant } from "@/lib/types";
 
@@ -12,9 +12,9 @@ export default async function TenantsPage() {
   ]);
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold tracking-tight">{t("tenants")}</h1>
+    <div>
+      <div className="flex items-baseline justify-between gap-3 border-b pb-4">
+        <h1 className="text-[1.75rem] font-semibold tracking-tight">{t("tenants")}</h1>
         <Link href="/onboard" className="btn-primary">
           <SparkIcon size={14} />
           {t("onboard")}
@@ -22,43 +22,61 @@ export default async function TenantsPage() {
       </div>
 
       {tenants.length === 0 ? (
-        <div className="card-surface p-12 text-center text-sm text-muted-foreground">No channels yet.</div>
+        <p className="py-16 text-center text-sm text-muted-foreground">
+          No channels yet. Connecting one takes a channel link, a Telegram account and a bot.
+        </p>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <ul className="rows">
           {tenants.map((x) => {
             const done = x.channel?.backfill_total_estimate
               ? Math.min(100, Math.round((x.channel.backfill_checkpoint / x.channel.backfill_total_estimate) * 100))
               : null;
             return (
-              <Link key={x.id} href={`/tenants/${x.id}`} className="card-surface block p-4">
-                <div className="flex items-center gap-2">
-                  <StatusDot status={x.status} />
-                  <span className="min-w-0 flex-1 truncate font-medium">{x.domain}</span>
-                  <span className="chip">{x.status}</span>
-                </div>
-                <p className="mt-1 truncate text-sm text-muted-foreground">
-                  {x.channel ? (x.channel.username ? `@${x.channel.username}` : x.channel.title) : "no channel yet"}
-                </p>
-                {done !== null ? (
-                  <div className="mt-3">
-                    <div className="mb-1 flex justify-between text-[0.7rem] text-muted-foreground">
-                      <span>import</span>
-                      <span className="tabular-nums">{done}%</span>
-                    </div>
-                    <div className="h-1 overflow-hidden rounded-full bg-border">
-                      <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${done}%` }} />
-                    </div>
+              <li key={x.id} className="row">
+                <span className="row-margin">
+                  <State status={x.status} />
+                </span>
+                <div className="row-body">
+                  <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                    <Link href={`/tenants/${x.id}`} className="min-w-0 flex-1 hover:text-primary">
+                      <span className="block truncate text-[0.9375rem] font-medium">{x.domain}</span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {x.channel
+                          ? x.channel.username
+                            ? `@${x.channel.username}`
+                            : x.channel.title
+                          : "No channel connected"}
+                      </span>
+                    </Link>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {x.bot_username ? `@${x.bot_username}` : "No bot"}
+                    </span>
+                    <span className="tnum shrink-0 text-xs text-muted-foreground">
+                      ${x.daily_chat_budget_usd} a day
+                    </span>
+                    {x.domain_verified_at ? null : (
+                      <span className="shrink-0 text-xs" style={{ color: "var(--warning)" }}>
+                        DNS not verified
+                      </span>
+                    )}
                   </div>
-                ) : null}
-                <div className="meta-row mt-3">
-                  <span>{x.bot_username ? `@${x.bot_username}` : "no bot"}</span>
-                  <span>${x.daily_chat_budget_usd}/day</span>
-                  {x.domain_verified_at ? null : <span className="text-warning">DNS unverified</span>}
+
+                  {done !== null && done < 100 ? (
+                    <div className="mt-2.5 max-w-xs">
+                      <div className="mb-1 flex justify-between text-[0.7rem] text-muted-foreground">
+                        <span>Importing history</span>
+                        <span className="tnum">{done}%</span>
+                      </div>
+                      <div className="h-[3px] overflow-hidden rounded-full bg-border">
+                        <div className="h-full rounded-full bg-primary" style={{ width: `${done}%` }} />
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
-              </Link>
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
     </div>
   );

@@ -2,23 +2,17 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useLocale } from "next-intl";
 import { useState } from "react";
 import { SparkIcon } from "@/components/Icons";
-import { StatusDot } from "@/components/admin/StatusDot";
+import { State } from "@/components/admin/StatusDot";
 import { post } from "@/lib/client";
+import { fullDate } from "@/lib/format";
 import type { DraftOut } from "@/lib/types";
-
-const TONE: Record<string, string> = {
-  draft: "queued",
-  scheduled: "running",
-  publishing: "running",
-  published: "succeeded",
-  failed: "failed",
-  canceled: "queued",
-};
 
 export function DraftList({ initial }: { initial: DraftOut[] }) {
   const router = useRouter();
+  const locale = useLocale();
   const [brief, setBrief] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,13 +33,13 @@ export function DraftList({ initial }: { initial: DraftOut[] }) {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="card-surface space-y-2.5 p-4">
+    <div>
+      <div className="max-w-xl">
         <div className="flex gap-2">
           <input
             value={brief}
             onChange={(e) => setBrief(e.target.value)}
-            placeholder="What should the post be about?"
+            placeholder="What should this post be about?"
             className="input-field"
           />
           <button
@@ -54,40 +48,54 @@ export function DraftList({ initial }: { initial: DraftOut[] }) {
             className="btn-primary shrink-0"
           >
             <SparkIcon size={14} />
-            Draft it
+            Write a draft
           </button>
         </div>
-        <button onClick={() => void create(false)} disabled={busy} className="text-xs text-muted-foreground hover:text-foreground">
-          or start from a blank post
+        <button
+          onClick={() => void create(false)}
+          disabled={busy}
+          className="mt-2 text-xs text-muted-foreground hover:text-foreground"
+        >
+          Or start from an empty post
         </button>
         {error ? (
-          <p className="text-sm" style={{ color: "var(--destructive)" }}>
+          <p className="mt-2 text-sm" style={{ color: "var(--destructive)" }}>
             {error}
           </p>
         ) : null}
       </div>
 
       {initial.length === 0 ? (
-        <div className="card-surface p-12 text-center text-sm text-muted-foreground">No drafts yet.</div>
+        <p className="border-t py-16 text-center text-sm text-muted-foreground">
+          Nothing written yet. Describe a post above and the assistant will start one.
+        </p>
       ) : (
-        <ul className="card-surface divide-y overflow-hidden">
+        <ul className="rows mt-8 border-t">
           {initial.map((d) => (
-            <li key={d.id}>
-              <Link href={`/studio/drafts/${d.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-2">
-                <StatusDot status={TONE[d.status] ?? "queued"} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">
-                    {d.title || stripTags(d.html) || "Untitled"}
+            <li key={d.id} className="row">
+              <div className="row-margin">
+                <State status={d.status} />
+                {d.scheduled_at ? (
+                  <span suppressHydrationWarning>{fullDate(d.scheduled_at, locale)}</span>
+                ) : null}
+              </div>
+              <div className="row-body">
+                <Link href={`/studio/drafts/${d.id}`} className="block hover:text-primary">
+                  <span className="block truncate text-[0.9375rem] font-medium">
+                    {d.title || stripTags(d.html) || "Untitled draft"}
                   </span>
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {d.status}
-                    {d.scheduled_at ? ` · ${new Date(d.scheduled_at).toLocaleString()}` : ""}
-                    {d.publish_error ? ` · ${d.publish_error}` : ""}
-                  </span>
-                </span>
-                {d.ai_generated ? <span className="chip">AI</span> : null}
-                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{d.length}</span>
-              </Link>
+                </Link>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {d.publish_error ? (
+                    <span style={{ color: "var(--destructive)" }}>{d.publish_error}</span>
+                  ) : (
+                    <>
+                      {d.length} characters
+                      {d.ai_generated ? ", drafted by the assistant" : ""}
+                    </>
+                  )}
+                </p>
+              </div>
             </li>
           ))}
         </ul>

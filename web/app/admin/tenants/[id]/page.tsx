@@ -5,6 +5,7 @@ import { StatusDot } from "@/components/admin/StatusDot";
 import { TenantActions } from "@/components/admin/TenantActions";
 import { apiFetchOrNull } from "@/lib/api";
 import type { AdminTenant, Checklist, JobRunOut } from "@/lib/types";
+import { compactNumber } from "@/lib/format";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -44,7 +45,7 @@ export default async function TenantDetail({ params }: Props) {
       <dl className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
         {[
           ["Channel", tenant.channel ? (tenant.channel.username ? `@${tenant.channel.username}` : tenant.channel.title) : "—"],
-          ["Subscribers", tenant.channel?.participants_count?.toLocaleString() ?? "—"],
+          ["Subscribers", tenant.channel?.participants_count ? compactNumber(tenant.channel.participants_count) : "—"],
           ["Bot", tenant.bot_username ? `@${tenant.bot_username}` : "—"],
           ["DNS", tenant.domain_verified_at ? "verified" : "unverified"],
           ["Chat budget", `$${tenant.daily_chat_budget_usd}/day`],

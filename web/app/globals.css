@@ -202,6 +202,11 @@
   }
 }
 
+@keyframes state-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
 @layer base {
   * {
     border-color: var(--border);
@@ -320,6 +325,69 @@
     flex: 1;
     height: 1px;
     background: var(--rule);
+  }
+
+  /* --- Working surfaces: the studio desk and the operator's console -------
+     Same grid as the register, but the margin carries state rather than a date,
+     because state is what you scan these screens for. Not sticky: these are
+     lists you work down, not an archive you travel through. */
+  .rows { display: flex; flex-direction: column; }
+
+  .row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.3rem 1.25rem;
+    padding: 0.85rem 0;
+    border-top: 1px solid var(--rule);
+  }
+  .row:first-child { border-top: none; }
+  .row-margin {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    min-width: 0;
+    font-size: 0.8125rem;
+    color: var(--muted-foreground);
+    font-variant-numeric: tabular-nums;
+  }
+  .row-body { min-width: 0; }
+
+  @media (min-width: 40rem) {
+    .row { grid-template-columns: var(--state-w, 7.5rem) minmax(0, 1fr); align-items: baseline; }
+    .row-margin { flex-direction: column; align-items: flex-start; gap: 0.1rem; }
+  }
+
+  /* State always reads as a dot and a word together: colour alone is not a
+     label, and half these states matter to someone who cannot see the hue. */
+  .state {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.8125rem;
+    white-space: nowrap;
+    color: var(--foreground);
+  }
+  .state::before {
+    content: "";
+    width: 0.4375rem;
+    height: 0.4375rem;
+    border-radius: 9999px;
+    background: var(--state-tone, var(--muted-foreground));
+    flex: none;
+  }
+  .state[data-tone="good"] { --state-tone: var(--success); }
+  .state[data-tone="busy"] { --state-tone: var(--warning); }
+  .state[data-tone="bad"] { --state-tone: var(--destructive); color: var(--destructive); }
+  .state[data-tone="idle"] { --state-tone: var(--muted-foreground); color: var(--muted-foreground); }
+  .state[data-busy="true"]::before { animation: state-pulse 1.8s ease-in-out infinite; }
+
+  /* The console is a wider measure than the reading surface: it holds tables,
+     not prose. */
+  .shell-wide {
+    margin-inline: auto;
+    width: 100%;
+    max-width: 72rem;
+    padding-inline: 1.25rem;
   }
 
   /* --- Telegram post body ------------------------------------------------ */
@@ -603,6 +671,10 @@
   }
   .nav-link:hover { color: var(--foreground); }
   .nav-link[data-active="true"] { color: var(--foreground); }
+  /* Tab variant: the marker sits on the rule the tabs stand on. */
+  .nav-tab { padding-bottom: 0.7rem; }
+  .nav-tab[data-active="true"]::after { bottom: -1px; }
+
   .nav-link[data-active="true"]::after {
     content: "";
     position: absolute;
@@ -618,6 +690,9 @@
   .text-balance { text-wrap: balance; }
   .text-pretty { text-wrap: pretty; }
   .tnum { font-variant-numeric: tabular-nums; }
+  /* Tab strips scroll sideways on narrow screens; the bar itself is noise there. */
+  .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
   /* Kept so existing markup keeps working; the page no longer animates itself
      on load, so these resolve to nothing. */
   .animate-rise, .animate-fade { animation: none; }

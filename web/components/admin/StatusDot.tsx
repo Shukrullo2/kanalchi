@@ -1,32 +1,85 @@
-const TONE: Record<string, string> = {
-  active: "var(--success)",
-  indexing: "var(--warning)",
-  backfilling: "var(--warning)",
-  onboarding: "var(--muted-foreground)",
-  paused: "var(--muted-foreground)",
-  error: "var(--destructive)",
-  dead: "var(--destructive)",
-  archived: "var(--muted-foreground)",
-  pending_code: "var(--warning)",
-  pending_password: "var(--warning)",
-  disabled: "var(--muted-foreground)",
-  flood_wait: "var(--warning)",
-  running: "var(--warning)",
-  succeeded: "var(--success)",
-  failed: "var(--destructive)",
-  queued: "var(--muted-foreground)",
+/**
+ * How every state in the studio and the console is written: a dot for speed, the
+ * word beside it for certainty. Colour on its own is not a label.
+ */
+
+type Tone = "good" | "busy" | "bad" | "idle";
+
+const TONES: Record<string, Tone> = {
+  // channels
+  active: "good",
+  indexing: "busy",
+  backfilling: "busy",
+  onboarding: "idle",
+  paused: "idle",
+  archived: "idle",
+  error: "bad",
+  // telegram accounts
+  pending_code: "busy",
+  pending_password: "busy",
+  flood_wait: "busy",
+  disabled: "idle",
+  dead: "bad",
+  // jobs
+  queued: "idle",
+  running: "busy",
+  succeeded: "good",
+  failed: "bad",
+  // drafts
+  draft: "idle",
+  scheduled: "busy",
+  publishing: "busy",
+  published: "good",
+  canceled: "idle",
 };
 
-/** A coloured dot carries status faster than a word, and the word stays next to it for clarity. */
-export function StatusDot({ status, pulse }: { status: string; pulse?: boolean }) {
-  const tone = TONE[status] ?? "var(--muted-foreground)";
-  const busy = pulse ?? ["running", "indexing", "backfilling", "pending_code", "pending_password"].includes(status);
+/** Plain words for states whose internal name would puzzle the reader. */
+const WORDS: Record<string, string> = {
+  pending_code: "waiting for the code",
+  pending_password: "waiting for the password",
+  flood_wait: "rate limited",
+  dead: "signed out",
+  backfilling: "importing history",
+  indexing: "indexing",
+  onboarding: "not set up yet",
+  draft: "not sent",
+  scheduled: "scheduled",
+  publishing: "sending",
+  published: "sent",
+  canceled: "cancelled",
+  failed: "failed",
+  succeeded: "done",
+  running: "running",
+  queued: "waiting",
+};
+
+export function toneOf(status: string): Tone {
+  return TONES[status] ?? "idle";
+}
+
+export function stateWord(status: string): string {
+  return WORDS[status] ?? status.replace(/_/g, " ");
+}
+
+/** Dot and word together. */
+export function State({ status, label }: { status: string; label?: string }) {
+  const tone = toneOf(status);
   return (
-    <span className="relative grid h-2.5 w-2.5 shrink-0 place-items-center" title={status}>
-      {busy ? (
-        <span className="absolute h-2.5 w-2.5 animate-ping rounded-full opacity-60" style={{ background: tone }} />
-      ) : null}
-      <span className="relative h-2 w-2 rounded-full" style={{ background: tone }} />
+    <span className="state" data-tone={tone} data-busy={tone === "busy"}>
+      {label ?? stateWord(status)}
     </span>
+  );
+}
+
+/** The dot alone, for rows that already name the state in their own words. */
+export function StatusDot({ status, pulse }: { status: string; pulse?: boolean }) {
+  const tone = toneOf(status);
+  return (
+    <span
+      className="state shrink-0"
+      data-tone={tone}
+      data-busy={pulse ?? tone === "busy"}
+      title={stateWord(status)}
+    />
   );
 }

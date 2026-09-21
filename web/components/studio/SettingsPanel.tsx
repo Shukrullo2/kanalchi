@@ -29,7 +29,7 @@ export function SettingsPanel({ initial }: { initial: StudioSettings }) {
   const voice = settings.voice_profile as Record<string, unknown> | null;
 
   return (
-    <div className="space-y-4">
+    <div className="divide-y">
       {error ? (
         <p className="text-sm" style={{ color: "var(--destructive)" }}>
           {error}
@@ -37,7 +37,7 @@ export function SettingsPanel({ initial }: { initial: StudioSettings }) {
       ) : null}
       {notice ? <p className="text-sm text-muted-foreground">{notice}</p> : null}
 
-      <section className="card-surface space-y-3 p-4">
+      <section className="space-y-3 py-5">
         <h2 className="text-sm font-medium">Reader assistant</h2>
         <label className="flex items-center gap-2 text-sm">
           <input
@@ -58,7 +58,7 @@ export function SettingsPanel({ initial }: { initial: StudioSettings }) {
         </p>
       </section>
 
-      <section className="card-surface space-y-3 p-4">
+      <section className="space-y-3 py-5">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-sm font-medium">Your writing voice</h2>
@@ -92,7 +92,7 @@ export function SettingsPanel({ initial }: { initial: StudioSettings }) {
         )}
       </section>
 
-      <section className="card-surface space-y-2 p-4 text-sm">
+      <section className="space-y-2 py-5 text-sm">
         <h2 className="font-medium">Publishing</h2>
         <p className="text-xs text-muted-foreground">
           {settings.bot_username ? (

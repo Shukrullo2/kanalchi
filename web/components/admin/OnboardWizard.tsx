@@ -6,23 +6,34 @@ import type { AdminTenant, Checklist, TgAccount } from "@/lib/types";
 
 type BotResult = { bot_username: string; webhook_set: boolean; webhook_error: string | null; setdomain_hint: string };
 
+/**
+ * Connecting a channel really is a sequence — each step needs the one before it —
+ * so the numbers are information and they sit in the margin, the way the date
+ * does on the reading side. A finished step swaps its number for a tick.
+ */
 function Step({ n, title, done, children }: { n: number; title: string; done: boolean; children: React.ReactNode }) {
   return (
-    <section className="card-surface p-4 sm:p-5">
-      <h2 className="mb-3 flex items-center gap-2.5 font-medium">
+    <section className="row" style={{ "--state-w": "5rem" } as React.CSSProperties}>
+      <div className="row-margin">
         <span
-          className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-semibold transition-colors"
+          className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-semibold"
           style={
             done
               ? { background: "var(--success)", color: "var(--background)" }
               : { background: "var(--surface-2)", color: "var(--muted-foreground)" }
           }
+          aria-hidden
         >
           {done ? "✓" : n}
         </span>
-        {title}
-      </h2>
-      {children}
+      </div>
+      <div className="row-body">
+        <h2 className="mb-3 text-[0.9375rem] font-medium">
+          {title}
+          <span className="sr-only">{done ? " — done" : " — not done yet"}</span>
+        </h2>
+        {children}
+      </div>
     </section>
   );
 }
@@ -63,8 +74,12 @@ export function OnboardWizard({ accounts }: { accounts: TgAccount[] }) {
   const steps = checklist?.steps;
 
   return (
-    <div className="max-w-2xl space-y-4">
-      {error ? <p className="rounded-md border p-2.5 text-sm" style={{ color: "var(--destructive)", borderColor: "var(--destructive)" }}>{error}</p> : null}
+    <div className="rows max-w-2xl">
+      {error ? (
+        <p className="border-l-2 py-1 pl-3 text-sm" style={{ color: "var(--destructive)", borderColor: "var(--destructive)" }}>
+          {error}
+        </p>
+      ) : null}
 
       <Step n={1} title="Domain" done={!!tenant}>
         {tenant ? (

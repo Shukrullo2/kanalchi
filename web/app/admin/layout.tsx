@@ -15,7 +15,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     const widget = await apiFetchOrNull<{ bot_username: string | null }>("/api/auth/widget", { admin: true });
     return (
       <main className="mx-auto flex min-h-screen max-w-sm flex-col items-center justify-center gap-5 px-6 text-center">
-        <div className="grid h-12 w-12 place-items-center rounded-2xl bg-primary text-lg font-semibold text-primary-foreground">
+        <div className="grid h-11 w-11 place-items-center rounded-xl bg-primary text-lg font-semibold text-primary-foreground">
           K
         </div>
         <div>
@@ -40,12 +40,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         ]}
         onboardLabel={t("onboard")}
       />
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:py-8">{children}</main>
-      <footer className="border-t">
-        <div className="mx-auto w-full max-w-5xl px-4 py-5 text-xs text-muted-foreground">
-          Kanalchi admin ·{" "}
-          <Link href="/jobs" className="link-quiet underline">
-            job queue
+      <main className="shell-wide flex-1 py-7 sm:py-9">{children}</main>
+      <footer className="mt-12 border-t">
+        <div className="shell-wide py-5 text-xs text-muted-foreground">
+          <Link href="/jobs" className="link-quiet">
+            Job queue
           </Link>
         </div>
       </footer>

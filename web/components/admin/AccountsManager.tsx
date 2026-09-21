@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { StatusDot } from "@/components/admin/StatusDot";
+import { State } from "@/components/admin/StatusDot";
 import { call, del, post } from "@/lib/client";
 import type { TgAccount } from "@/lib/types";
 
@@ -63,22 +63,23 @@ export function AccountsManager({ initial }: { initial: TgAccount[] }) {
 
       {error ? <p className="rounded-md border px-3 py-2 text-sm" style={{ color: "var(--destructive)", borderColor: "var(--destructive)" }}>{error}</p> : null}
 
-      <div className="space-y-3">
+      {accounts.length > 0 ? (
+      <ul className="rows mt-6 border-t">
         {accounts.map((a) => (
-          <div key={a.id} className="card-surface p-3.5 text-sm">
+          <li key={a.id} className="row text-sm" style={{ "--state-w": "11rem" } as React.CSSProperties}>
+            <span className="row-margin">
+              <State status={a.status} />
+              {a.last_seen_at ? <span suppressHydrationWarning>{seen(a.last_seen_at)}</span> : null}
+            </span>
+            <div className="row-body">
             <div className="flex flex-wrap items-center gap-3">
               <span className="font-medium">{a.phone}</span>
-              <StatusDot status={a.status} />
-              <span className="chip">{a.status}</span>
               {a.display_name ? <span className="text-muted-foreground">{a.display_name}</span> : null}
-              {a.last_seen_at ? (
-                <span className="text-xs text-muted-foreground">seen {new Date(a.last_seen_at).toLocaleString()}</span>
-              ) : null}
               <button
                 onClick={() => void run(() => del(`/api/admin/accounts/${a.id}`))}
                 className="link-quiet ml-auto text-xs"
               >
-                disable
+                Disable
               </button>
             </div>
             {typeof a.health?.last_error === "string" && a.health.last_error ? (
@@ -103,25 +104,38 @@ export function AccountsManager({ initial }: { initial: TgAccount[] }) {
                   value={secret[a.id] ?? ""}
                   onChange={(e) => setSecret((s) => ({ ...s, [a.id]: e.target.value }))}
                 />
-                <button className="btn-primary py-1 text-xs">submit</button>
+                <button className="btn-primary py-1 text-xs">Confirm</button>
                 {a.status === "pending_code" ? (
                   <button
                     type="button"
                     onClick={() => void run(() => post(`/api/admin/accounts/${a.id}/resend`))}
                     className="text-xs text-muted-foreground hover:text-foreground"
                   >
-                    resend
+                    Send another code
                   </button>
                 ) : null}
                 <span className="text-xs text-muted-foreground">
-                  worker-telegram must be running for the login to complete
+                  The Telegram worker has to be running for this to go through.
                 </span>
               </form>
             ) : null}
-          </div>
+            </div>
+          </li>
         ))}
-        {accounts.length === 0 ? <p className="text-sm text-muted-foreground">No accounts yet.</p> : null}
-      </div>
+      </ul>
+      ) : (
+        <p className="mt-6 border-t py-12 text-center text-sm text-muted-foreground">
+          No accounts yet. Add the phone number of a spare Telegram account above — it is what reads the
+          channel history.
+        </p>
+      )}
     </div>
   );
+}
+
+/** Last seen, in UTC, written identically on the server and in the browser. */
+function seen(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `seen ${pad(d.getUTCDate())}.${pad(d.getUTCMonth() + 1)} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
 }

@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useLocale } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeftIcon, CloseIcon, ExternalIcon, SparkIcon } from "@/components/Icons";
 import { TagChip } from "@/components/tags/TagChip";
 import { del, patch, post } from "@/lib/client";
+import { fullDate } from "@/lib/format";
 import type { DraftOut } from "@/lib/types";
 
 const TEXT_LIMIT = 4096;
@@ -22,6 +24,7 @@ const MARKS = [
 
 export function DraftEditor({ initial, botUsername }: { initial: DraftOut; botUsername: string | null }) {
   const router = useRouter();
+  const locale = useLocale();
   const editorRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState(initial);
   const [html, setHtml] = useState(initial.html);
@@ -116,13 +119,15 @@ export function DraftEditor({ initial, botUsername }: { initial: DraftOut; botUs
         <span className="chip">{draft.status}</span>
         {draft.ai_generated ? <span className="chip">AI draft</span> : null}
         <span className="ml-auto text-xs text-muted-foreground">
-          {saving === "saving" ? "saving…" : saving === "saved" ? "saved" : ""}
+          {saving === "saving" ? "Saving…" : saving === "saved" ? "Saved" : ""}
         </span>
       </div>
 
       {published ? (
-        <div className="card-surface p-4 text-sm">
-          Published{draft.published_at ? ` on ${new Date(draft.published_at).toLocaleString()}` : ""}.
+        <div className="border-l-2 py-1 pl-3 text-sm" style={{ borderColor: "var(--success)" }}>
+          <span suppressHydrationWarning>
+            Published{draft.published_at ? ` on ${fullDate(draft.published_at, locale)}` : ""}.
+          </span>
           {botUsername ? ` Sent by @${botUsername}.` : ""}
         </div>
       ) : null}
@@ -231,7 +236,7 @@ export function DraftEditor({ initial, botUsername }: { initial: DraftOut; botUs
               <div className="text-xs text-muted-foreground">Will be filed under</div>
               <div className="flex flex-wrap gap-1.5">
                 {draft.suggested_tags.map((t) => (
-                  <TagChip key={t.slug} tag={t} locale="uz" />
+                  <TagChip key={t.slug} tag={t} locale={locale} />
                 ))}
               </div>
             </div>
@@ -281,7 +286,7 @@ export function DraftEditor({ initial, botUsername }: { initial: DraftOut; botUs
             }}
             className="link-quiet ml-auto text-xs"
           >
-            delete
+            Delete draft
           </button>
         </div>
       ) : draft.published_tg_message_id ? (
@@ -291,7 +296,7 @@ export function DraftEditor({ initial, botUsername }: { initial: DraftOut; botUs
           target="_blank"
           rel="noreferrer"
         >
-          open in Telegram <ExternalIcon size={12} />
+          Open in Telegram <ExternalIcon size={12} />
         </a>
       ) : null}
     </div>

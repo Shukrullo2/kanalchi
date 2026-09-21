@@ -39,7 +39,7 @@ export function TagManager({
   }
 
   return (
-    <div className="space-y-5">
+    <div>
       {error ? (
         <p className="text-sm" style={{ color: "var(--destructive)" }}>
           {error}
@@ -47,37 +47,43 @@ export function TagManager({
       ) : null}
       {notice ? <p className="text-sm text-muted-foreground">{notice}</p> : null}
 
-      <section className="card-surface overflow-hidden">
-        <header className="flex items-center justify-between gap-3 border-b px-4 py-3">
-          <h2 className="text-sm font-medium">Waiting for review</h2>
+      <section>
+        <header className="flex items-center justify-between gap-3 border-b pb-2.5">
+          <h2 className="text-[0.9375rem] font-medium">Names waiting to be filed</h2>
           <button
-            onClick={() => void run("Taxonomy rebuild queued.", () => post("/api/studio/taxonomy/rebuild", {}))}
+            onClick={() => void run("Rebuilding the index — it runs in the background.", () => post("/api/studio/taxonomy/rebuild", {}))}
             disabled={busy}
             className="btn-ghost py-1 text-xs"
           >
-            Rebuild taxonomy
+            Rebuild the index
           </button>
         </header>
         {queue.length === 0 ? (
-          <p className="p-8 text-center text-sm text-muted-foreground">
-            Nothing waiting. New names are added automatically once they recur.
+          <p className="py-10 text-sm text-muted-foreground">
+            Nothing waiting. Names appear here once they have come up in a few posts.
           </p>
         ) : (
-          <ul className="divide-y">
+          <ul className="rows">
             {queue.map((c) => (
-              <li key={c.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-                <span
-                  className="h-2 w-2 shrink-0 rounded-full"
-                  style={{ background: toneVar(c.dimension) }}
-                  aria-hidden
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">{c.name}</span>
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {c.dimension} · seen {c.count}×
-                    {c.surface_forms.length > 1 ? ` · ${c.surface_forms.slice(0, 3).join(", ")}` : ""}
-                  </span>
+              <li key={c.id} className="row items-center" style={{ "--state-w": "9rem" } as React.CSSProperties}>
+                <span className="row-margin">
+                  <span
+                    className="h-[0.4375rem] w-[0.4375rem] shrink-0 rounded-full"
+                    style={{ background: toneVar(c.dimension) }}
+                    aria-hidden
+                  />
+                  <span className="truncate">{c.dimension}</span>
                 </span>
+                <span className="row-body flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[0.9375rem] font-medium">{c.name}</span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      In {c.count} posts
+                      {c.surface_forms.length > 1
+                        ? `, written as ${c.surface_forms.slice(0, 3).join(", ")}`
+                        : ""}
+                    </span>
+                  </span>
                 <button
                   onClick={() => void run(`Added “${c.name}”.`, () => post(`/api/studio/tags/pending/${c.id}/promote`, {}))}
                   disabled={busy}
@@ -90,26 +96,27 @@ export function TagManager({
                   disabled={busy}
                   className="link-quiet text-xs"
                 >
-                  ignore
+                  Ignore
                 </button>
+                </span>
               </li>
             ))}
           </ul>
         )}
       </section>
 
-      <section className="card-surface overflow-hidden">
-        <header className="border-b px-4 py-3">
-          <h2 className="text-sm font-medium">Your tags</h2>
+      <section className="mt-10">
+        <header className="border-b pb-2.5">
+          <h2 className="text-[0.9375rem] font-medium">Everything in the index</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Hiding or merging a tag is remembered, so a later rebuild will not undo it.
+            Hiding or merging a tag sticks: a later rebuild will not undo it.
           </p>
         </header>
         <ul className="divide-y">
           {tags.map((t) => (
-            <li key={t.slug} className="flex flex-wrap items-center gap-3 px-4 py-2.5">
+            <li key={t.slug} className="flex flex-wrap items-center gap-3 py-2.5">
               <span
-                className="h-2 w-2 shrink-0 rounded-full"
+                className="h-[0.4375rem] w-[0.4375rem] shrink-0 rounded-full"
                 style={{ background: toneVar(t.dimension) }}
                 aria-hidden
               />
@@ -126,7 +133,7 @@ export function TagManager({
                   }}
                   defaultValue=""
                 >
-                  <option value="">merge into…</option>
+                  <option value="">Merge into…</option>
                   {tags
                     .filter((o) => o.slug !== t.slug && o.dimension === t.dimension)
                     .map((o) => (
@@ -137,7 +144,7 @@ export function TagManager({
                 </select>
               ) : (
                 <button onClick={() => setMergeFrom(t.slug)} className="link-quiet text-xs">
-                  merge
+                  Merge
                 </button>
               )}
               <button
@@ -145,7 +152,7 @@ export function TagManager({
                 disabled={busy}
                 className="link-quiet text-xs"
               >
-                hide
+                Hide
               </button>
             </li>
           ))}

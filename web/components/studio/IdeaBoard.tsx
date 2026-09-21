@@ -7,11 +7,19 @@ import { call, del, patch, post } from "@/lib/client";
 import type { IdeaOut } from "@/lib/types";
 
 const COLUMNS: { key: IdeaOut["status"]; label: string }[] = [
-  { key: "inbox", label: "Inbox" },
-  { key: "researching", label: "Researching" },
-  { key: "drafting", label: "Drafting" },
-  { key: "published", label: "Published" },
+  { key: "inbox", label: "Caught" },
+  { key: "researching", label: "Looking into it" },
+  { key: "drafting", label: "Being written" },
+  { key: "published", label: "Sent" },
 ];
+
+/** An empty column should say what to do, not describe its own emptiness. */
+const EMPTY: Record<string, string> = {
+  inbox: "Anything you jot down lands here.",
+  researching: "Drag an idea here while you dig into it.",
+  drafting: "Ideas you have started writing show up here.",
+  published: "Ideas that made it to the channel.",
+};
 
 export function IdeaBoard({ initial }: { initial: IdeaOut[] }) {
   const router = useRouter();
@@ -83,9 +91,10 @@ export function IdeaBoard({ initial }: { initial: IdeaOut[] }) {
         </p>
       ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-6 grid gap-x-5 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
         {COLUMNS.map((column) => {
           const items = ideas.filter((i) => i.status === column.key);
+          const over = dragging !== null;
           return (
             <section
               key={column.key}
@@ -94,27 +103,29 @@ export function IdeaBoard({ initial }: { initial: IdeaOut[] }) {
                 if (dragging !== null) void move(dragging, column.key);
                 setDragging(null);
               }}
-              className="rounded-xl bg-surface-2 p-2"
+              className={`rounded-lg border border-dashed p-1 transition-colors ${
+                over ? "border-border-strong bg-surface-2" : "border-transparent"
+              }`}
             >
-              <h2 className="mb-2 flex items-baseline justify-between px-1 text-[0.8125rem] font-medium text-muted-foreground">
-                {column.label}
-                <span>{items.length}</span>
+              <h2 className="mb-2 flex items-baseline justify-between gap-2 border-b pb-1.5 text-[0.8125rem]">
+                <span className="font-medium">{column.label}</span>
+                <span className="tnum text-xs text-muted-foreground">{items.length}</span>
               </h2>
-              <ul className="space-y-2">
+              <ul className="space-y-1.5">
                 {items.map((idea) => (
                   <li
                     key={idea.id}
                     draggable
                     onDragStart={() => setDragging(idea.id)}
                     onDragEnd={() => setDragging(null)}
-                    className="card-surface group cursor-grab p-3 active:cursor-grabbing"
+                    className="panel group cursor-grab p-2.5 active:cursor-grabbing"
                   >
                     <div className="flex items-start gap-2">
                       <p className="min-w-0 flex-1 text-sm">{idea.title}</p>
                       <button
                         onClick={() => void run(() => del(`/api/studio/ideas/${idea.id}`))}
-                        className="text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
-                        aria-label="Delete idea"
+                        className="text-muted-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+                        aria-label={`Delete "${idea.title}"`}
                       >
                         <CloseIcon size={13} />
                       </button>
@@ -125,15 +136,15 @@ export function IdeaBoard({ initial }: { initial: IdeaOut[] }) {
                     {idea.status !== "published" ? (
                       <button
                         onClick={() => void draftFrom(idea)}
-                        className="mt-2 text-xs text-primary opacity-0 transition-opacity group-hover:opacity-100"
+                        className="mt-2 text-xs text-primary opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
                       >
-                        write a draft →
+                        Write a draft
                       </button>
                     ) : null}
                   </li>
                 ))}
                 {items.length === 0 ? (
-                  <li className="px-1 py-6 text-center text-xs text-muted-foreground">drop ideas here</li>
+                  <li className="px-1 py-5 text-xs text-muted-foreground">{EMPTY[column.key]}</li>
                 ) : null}
               </ul>
             </section>
