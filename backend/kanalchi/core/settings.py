@@ -43,6 +43,13 @@ class Settings(BaseSettings):
     extract_model: str = "claude-sonnet-5"
     embed_model: str = "voyage-4"
     embed_dim: int = 1024
+    # Voyage throttles hard until the account has a payment method (3 requests and
+    # 10k tokens a minute). Zero means "no client-side limit" — the normal case.
+    embed_max_rpm: int = 0
+    embed_max_tpm: int = 0
+    # Posts per embedding job. Smaller means more frequent checkpoints, which
+    # matters when a throttled account stretches one job over an hour.
+    embed_job_posts: int = 500
     enable_refusal_fallbacks: bool = True
 
     # --- budgets / limits ---

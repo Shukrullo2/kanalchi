@@ -31,12 +31,14 @@ async def index_post(post_id: int) -> dict[str, Any]:
 @app.task(queue="index", name="index.embed_batch", retry=2)
 async def embed_batch(tenant_id: int, post_ids: list[int] | None = None) -> dict[str, Any]:
     from kanalchi.ai.indexing import pending_embed_ids, rebuild_chunks
+    from kanalchi.core.settings import get_settings
 
-    ids = post_ids or await pending_embed_ids(tenant_id)
+    size = get_settings().embed_job_posts
+    ids = post_ids or await pending_embed_ids(tenant_id, limit=size)
     if not ids:
         return {"chunks": 0}
     chunks = await rebuild_chunks(ids)
-    if not post_ids and len(ids) >= 500:
+    if not post_ids and len(ids) >= size:
         await embed_batch.defer_async(tenant_id=tenant_id)  # keep going in a fresh short job
     return {"chunks": chunks, "posts": len(ids)}
 
