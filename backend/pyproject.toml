@@ -61,6 +61,7 @@ ignore = ["E501", "B008"]  # B008: FastAPI Depends() in defaults is idiomatic
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "module"
 testpaths = ["tests"]
 
 [tool.mypy]

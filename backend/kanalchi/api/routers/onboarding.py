@@ -24,7 +24,9 @@ from kanalchi.telegram.verify import bot_can_post
 
 log = get_logger(__name__)
 router = APIRouter(
-    prefix="/api/admin", tags=["onboarding"], dependencies=[Depends(require_admin), Depends(enforce_same_origin)]
+    prefix="/api/admin",
+    tags=["onboarding"],
+    dependencies=[Depends(require_admin), Depends(enforce_same_origin)],
 )
 
 LOGIN_SECRET_TTL = 600
@@ -143,7 +145,9 @@ async def attach_channel(tenant_id: int, body: ChannelLink, db: AsyncSession = D
     acc = await db.get(TelegramAccount, body.account_id)
     if acc is None or acc.status != "active":
         raise HTTPException(400, "pick a signed-in Telegram account")
-    job_run_id = await create_job_run(tenant_id, "resolve", {"link": body.link, "account_id": body.account_id})
+    job_run_id = await create_job_run(
+        tenant_id, "resolve", {"link": body.link, "account_id": body.account_id}
+    )
     await telegram_jobs.channel_resolve.defer_async(
         tenant_id=tenant_id,
         link=body.link.strip(),
@@ -177,7 +181,9 @@ async def set_bot(tenant_id: int, body: BotToken, db: AsyncSession = Depends(get
 
     ok, detail = await bot_can_post(token, channel.tg_channel_id)
     if not ok:
-        raise HTTPException(400, f"add @{me.username} to the channel as an admin with 'Post messages' ({detail})")
+        raise HTTPException(
+            400, f"add @{me.username} to the channel as an admin with 'Post messages' ({detail})"
+        )
 
     tenant.bot_token_enc = encrypt(token)
     tenant.bot_id = me.id

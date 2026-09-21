@@ -17,7 +17,8 @@
     "unknownHost": "Bu domen hech qaysi kanalga ulanmagan.",
     "loadMore": "Yana",
     "older": "oldingi",
-    "newer": "keyingi"
+    "newer": "keyingi",
+    "notIndexedYet": "Teglar arxiv indekslangach paydo bo'ladi."
   },
   "home": {
     "emptyTitle": "Hozircha bo‘sh",
@@ -39,5 +40,11 @@
     "needLogin": "Ruxsat berilgan Telegram akkaunt orqali kiring.",
     "spendToday": "Bugungi xarajat",
     "runningJobs": "Bajarilayotgan vazifalar"
+  },
+  "search": {
+    "placeholder": "Kanal bo'ylab qidirish…",
+    "nothing": "Hech narsa topilmadi.",
+    "sortBy": "tartib",
+    "clear": "tozalash"
   }
 }

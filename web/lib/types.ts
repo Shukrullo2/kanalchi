@@ -131,3 +131,51 @@ export type JobRunOut = {
   finished_at: string | null;
   created_at: string;
 };
+
+export type DimensionOut = {
+  key: string;
+  labels: Record<string, string>;
+  description: string | null;
+  kind: string;
+  tag_count: number;
+};
+
+export type TagOut = {
+  slug: string;
+  name: string;
+  labels: Record<string, string>;
+  description: string | null;
+  dimension: string | null;
+  post_count: number;
+  engagement_score: number;
+  parent_id: number | null;
+  confidence?: number;
+};
+
+export type TagDetail = TagOut & {
+  redirect_to?: string;
+  first_post_at: string | null;
+  last_post_at: string | null;
+  histogram: { month: string; count: number }[];
+  co_tags: { slug: string; name: string; labels: Record<string, string>; count: number }[];
+  children: TagOut[];
+  parent: TagOut | null;
+};
+
+export type SearchResult = {
+  items: PostOut[];
+  count: number;
+  offset: number;
+  has_more: boolean;
+  facets?: Record<string, { slug: string; name: string; labels: Record<string, string>; count: number }[]>;
+};
+
+export type ChannelStats = {
+  posts: number;
+  total_views: number;
+  mean_views: number;
+  first_post_at: string | null;
+  last_post_at: string | null;
+  by_month: { month: string; posts: number; mean_views: number }[];
+  top_tags: TagOut[];
+};

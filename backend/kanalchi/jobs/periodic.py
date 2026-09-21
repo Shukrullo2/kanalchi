@@ -60,3 +60,26 @@ async def resync_month(context, timestamp: int) -> None:  # noqa: ANN001
 @app.task(queue="telegram", name="periodic.resync_quarter", pass_context=True)
 async def resync_quarter(context, timestamp: int) -> None:  # noqa: ANN001
     await _fan_out_resync(90)
+
+
+@app.periodic(cron="*/2 * * * *")
+@app.task(queue="index", name="periodic.poll_batches", pass_context=True)
+async def poll_batches(context, timestamp: int) -> None:  # noqa: ANN001
+    """Check in-flight extraction batches and ingest the ones that ended."""
+    from kanalchi.ai.extraction import poll_batches as _poll
+    from kanalchi.jobs import index_jobs
+
+    for llm_batch_id in await _poll():
+        await index_jobs.ingest_batch.defer_async(llm_batch_id=llm_batch_id)
+
+
+@app.periodic(cron="20 2 * * *")
+@app.task(queue="index", name="periodic.nightly_counts", pass_context=True)
+async def nightly_counts(context, timestamp: int) -> None:  # noqa: ANN001
+    """Refresh tag post counts and engagement scores after the overnight resyncs."""
+    from kanalchi.jobs import index_jobs
+
+    async with session_scope() as db:
+        rows = (await db.execute(select(Tenant.id).where(Tenant.status.in_(["active", "indexing"])))).all()
+    for (tenant_id,) in rows:
+        await index_jobs.recompute_counts.defer_async(tenant_id=tenant_id)

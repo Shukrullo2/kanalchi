@@ -17,7 +17,8 @@
     "unknownHost": "This domain is not connected to any channel.",
     "loadMore": "Load more",
     "older": "older",
-    "newer": "newer"
+    "newer": "newer",
+    "notIndexedYet": "Tags appear once the archive has been indexed."
   },
   "home": {
     "emptyTitle": "Nothing here yet",
@@ -39,5 +40,11 @@
     "needLogin": "Sign in with an allow-listed Telegram account.",
     "spendToday": "Spend today",
     "runningJobs": "Running jobs"
+  },
+  "search": {
+    "placeholder": "Search this channel…",
+    "nothing": "Nothing found.",
+    "sortBy": "sort",
+    "clear": "clear filters"
   }
 }

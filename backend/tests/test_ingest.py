@@ -49,7 +49,12 @@ def test_plain_text_message():
 
 
 def test_service_message_is_skipped():
-    assert message_fields(tl.MessageService(id=1, peer_id=tl.PeerChannel(1), date=datetime.now(UTC), action=None)) is None
+    assert (
+        message_fields(
+            tl.MessageService(id=1, peer_id=tl.PeerChannel(1), date=datetime.now(UTC), action=None)
+        )
+        is None
+    )
 
 
 def test_reactions_are_summed():

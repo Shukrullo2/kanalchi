@@ -20,6 +20,7 @@ export default async function TenantLayout({ children }: { children: React.React
           <Link href="/">{t("home")}</Link>
           <Link href="/tags">{t("tags")}</Link>
           <Link href="/search">{t("search")}</Link>
+          <Link href="/top">{t("top")}</Link>
           <Link href="/chat">{t("chat")}</Link>
           {isMember ? (
             <Link href="/studio" className="font-medium">

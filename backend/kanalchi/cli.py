@@ -205,6 +205,162 @@ def seed_dev(domain: str = "demo.localhost", title: str = "Demo kanal", posts: i
     asyncio.run(_run())
 
 
+@app.command("seed-tags")
+def seed_tags(domain: str = "demo.localhost") -> None:
+    """Attach a small hand-made taxonomy to the seeded posts (no API keys needed)."""
+    from sqlalchemy import select
+
+    from kanalchi.ai.discovery import ensure_universal_dimensions
+    from kanalchi.ai.postprocess import apply_extraction
+    from kanalchi.core.db import session_scope
+    from kanalchi.core.models import Dimension, Post, Tag, TagAlias, Tenant
+    from kanalchi.text.normalize import normalize
+    from kanalchi.text.slug import slugify
+
+    # canonical name -> (dimension, aliases) — the aliases are what make the cascade match
+    TAGS = {
+        "Toshkent": ("locations", ["Тошкент", "Ташкент", "Tashkent"]),
+        "Toshkent shahar hokimligi": ("gov_orgs", ["Тошкент шаҳар ҳокимлиги", "hokimlik", "хокимият"]),
+        "Adliya vazirligi": ("gov_orgs", ["Министерство юстиции", "Минюст", "Ministry of Justice"]),
+        "O'zbekiston Prezidenti": ("gov_orgs", ["Президент", "Ўзбекистон Республикаси Президенти"]),
+        "Markaziy bank": ("gov_orgs", ["Central Bank", "Центральный банк"]),
+        "Qurilish": ("themes", ["construction", "строительство"]),
+        "Qonunchilik": ("themes", ["legislation", "законодательство", "qonun"]),
+        "Iqtisodiyot": ("themes", ["economy", "экономика"]),
+        "Ob-havo": ("themes", ["weather", "погода"]),
+        "Startaplar": ("themes", ["startups", "стартапы"]),
+    }
+    # tg_message_id % len(SEED_SAMPLES) -> extraction stand-in for that sample text
+    SAMPLE_TAGS = {
+        0: {
+            "entities": [("location", "Toshkent"), ("gov_org", "Toshkent shahar hokimligi")],
+            "themes": ["Qurilish"],
+            "format": "news",
+            "lang": "uz-Latn",
+        },
+        1: {
+            "entities": [("gov_org", "Adliya vazirligi")],
+            "themes": ["Qonunchilik"],
+            "format": "announcement",
+            "lang": "ru",
+        },
+        2: {
+            "entities": [("gov_org", "O'zbekiston Prezidenti")],
+            "themes": ["Qonunchilik"],
+            "format": "announcement",
+            "lang": "uz-Cyrl",
+        },
+        3: {
+            "entities": [("gov_org", "Markaziy bank")],
+            "themes": ["Iqtisodiyot"],
+            "format": "news",
+            "lang": "en",
+        },
+        4: {
+            "entities": [("location", "Toshkent")],
+            "themes": ["Ob-havo"],
+            "format": "news",
+            "lang": "uz-Latn",
+        },
+        5: {
+            "entities": [("location", "Toshkent")],
+            "themes": ["Startaplar"],
+            "format": "news",
+            "lang": "uz-Latn",
+        },
+    }
+
+    async def _run() -> None:
+        async with session_scope() as db:
+            tenant = await db.scalar(select(Tenant).where(Tenant.domain == domain))
+            if tenant is None:
+                typer.echo(f"tenant {domain} not found; run seed-dev first")
+                return
+            tenant_id = tenant.id
+        await ensure_universal_dimensions(tenant_id)
+
+        async with session_scope() as db:
+            dims = {
+                k: v
+                for k, v in (
+                    await db.execute(
+                        select(Dimension.key, Dimension.id).where(Dimension.tenant_id == tenant_id)
+                    )
+                ).all()
+            }
+            for canonical, (dim_key, aliases) in TAGS.items():
+                norm = normalize(canonical)
+                tag = await db.scalar(
+                    select(Tag).where(Tag.tenant_id == tenant_id, Tag.canonical_norm == norm)
+                )
+                if tag is None:
+                    tag = Tag(
+                        tenant_id=tenant_id,
+                        dimension_id=dims[dim_key],
+                        slug=slugify(canonical),
+                        canonical_name=canonical,
+                        canonical_norm=norm,
+                        labels={"uz": canonical, "ru": canonical, "en": canonical},
+                        status="active",
+                        source="taxonomy",
+                    )
+                    db.add(tag)
+                    await db.flush()
+                for alias in [canonical, *aliases]:
+                    an = normalize(alias)
+                    exists = await db.scalar(
+                        select(TagAlias.id).where(TagAlias.tag_id == tag.id, TagAlias.alias_norm == an)
+                    )
+                    if not exists:
+                        db.add(
+                            TagAlias(
+                                tenant_id=tenant_id,
+                                tag_id=tag.id,
+                                alias=alias,
+                                alias_norm=an,
+                                source="manual",
+                            )
+                        )
+
+            posts = (
+                await db.scalars(select(Post).where(Post.tenant_id == tenant_id).order_by(Post.tg_message_id))
+            ).all()
+            plan = [(p.id, SAMPLE_TAGS[p.tg_message_id % len(SEED_SAMPLES)]) for p in posts]
+
+        for post_id, spec in plan:
+            extraction = {
+                "language_primary": spec["lang"],
+                "format": spec["format"],
+                "title": None,
+                "summary": None,
+                "themes": [{"name": t, "confidence": 0.9} for t in spec["themes"]],
+                "entities": [
+                    {
+                        "type": kind,
+                        "normalized": name,
+                        "surface": name,
+                        "lang": spec["lang"],
+                        "role": "mentioned",
+                        "sentiment_toward": None,
+                        "confidence": 0.9,
+                    }
+                    for kind, name in spec["entities"]
+                ],
+                "custom": [],
+                "hashtags": [],
+                "taxonomy_mapped": [],
+                "key_claims": [],
+            }
+            await apply_extraction(post_id, extraction)
+
+        from kanalchi.ai.taxonomy import recompute_counts
+
+        await recompute_counts(tenant_id)
+        typer.echo(f"tagged {len(plan)} posts with {len(TAGS)} tags")
+
+    asyncio.run(_run())
+
+
 @app.command("rotate-keys")
 def rotate_keys() -> None:
     """Re-encrypt sessions and bot tokens with the primary APP_MASTER_KEY (set APP_MASTER_KEY_PREV first)."""

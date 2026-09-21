@@ -1,0 +1,323 @@
+"""Public tag browsing and search on tenant hosts."""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from kanalchi.api.deps import get_db, require_tenant
+from kanalchi.api.serializers import attach_media_links, post_out
+from kanalchi.core.models import Channel, Dimension, Post, PostTag, Tag, Tenant
+from kanalchi.search import hybrid
+
+router = APIRouter(prefix="/api", tags=["tags"])
+
+
+def tag_out(tag: Tag, dimension_key: str | None = None) -> dict[str, Any]:
+    return {
+        "slug": tag.slug,
+        "name": tag.canonical_name,
+        "labels": tag.labels or {},
+        "description": tag.description,
+        "dimension": dimension_key,
+        "post_count": tag.post_count,
+        "engagement_score": round(tag.engagement_score or 0, 2),
+        "parent_id": tag.parent_id,
+    }
+
+
+async def _channel(db: AsyncSession, tenant: Tenant) -> Channel | None:
+    return await db.scalar(select(Channel).where(Channel.tenant_id == tenant.id))
+
+
+async def _posts_by_ids(db: AsyncSession, tenant: Tenant, ids: list[int]) -> list[dict[str, Any]]:
+    if not ids:
+        return []
+    channel = await _channel(db, tenant)
+    if channel is None:
+        return []
+    rows = (await db.scalars(select(Post).where(Post.id.in_(ids)))).all()
+    by_id = {p.id: p for p in rows}
+    ordered = [by_id[i] for i in ids if i in by_id]
+    media_by, links_by = await attach_media_links(db, ordered)
+    return [post_out(p, channel, media_by.get(p.id, []), links_by.get(p.id, [])) for p in ordered]
+
+
+@router.get("/dimensions")
+async def list_dimensions(
+    tenant: Tenant = Depends(require_tenant), db: AsyncSession = Depends(get_db)
+) -> list[dict]:
+    rows = (
+        await db.execute(
+            select(Dimension, func.count(Tag.id))
+            .outerjoin(
+                Tag, (Tag.dimension_id == Dimension.id) & (Tag.status == "active") & (Tag.post_count > 0)
+            )
+            .where(Dimension.tenant_id == tenant.id, Dimension.is_visible.is_(True))
+            .group_by(Dimension.id)
+            .order_by(Dimension.sort_order)
+        )
+    ).all()
+    return [
+        {
+            "key": d.key,
+            "labels": d.labels or {},
+            "description": d.description,
+            "kind": d.kind,
+            "tag_count": count,
+        }
+        for d, count in rows
+        if count
+    ]
+
+
+@router.get("/tags")
+async def list_tags(
+    dimension: str | None = None,
+    q: str | None = None,
+    limit: int = Query(100, ge=1, le=500),
+    tenant: Tenant = Depends(require_tenant),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict]:
+    stmt = (
+        select(Tag, Dimension.key)
+        .join(Dimension, Dimension.id == Tag.dimension_id)
+        .where(
+            Tag.tenant_id == tenant.id,
+            Tag.status == "active",
+            Tag.post_count > 0,
+            Dimension.is_visible.is_(True),
+        )
+    )
+    if dimension:
+        stmt = stmt.where(Dimension.key == dimension)
+    if q:
+        from kanalchi.text.normalize import normalize
+
+        stmt = stmt.where(Tag.canonical_norm.like(f"%{normalize(q)}%"))
+    rows = (await db.execute(stmt.order_by(Tag.post_count.desc()).limit(limit))).all()
+    return [tag_out(t, key) for t, key in rows]
+
+
+@router.get("/tags/{slug}")
+async def tag_detail(
+    slug: str,
+    tenant: Tenant = Depends(require_tenant),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    row = (
+        await db.execute(
+            select(Tag, Dimension.key)
+            .join(Dimension, Dimension.id == Tag.dimension_id)
+            .where(Tag.tenant_id == tenant.id, Tag.slug == slug)
+        )
+    ).first()
+    if row is None:
+        raise HTTPException(404, "tag not found")
+    tag, dimension_key = row
+    if tag.status == "merged" and tag.merged_into_id:
+        target = await db.get(Tag, tag.merged_into_id)
+        if target is not None:
+            return {"redirect_to": target.slug}
+
+    histogram = (
+        await db.execute(
+            text(
+                """
+                SELECT to_char(date_trunc('month', p.date), 'YYYY-MM') AS bucket, count(*) AS cnt
+                FROM post_tags pt JOIN posts p ON p.id = pt.post_id
+                WHERE pt.tag_id = :tag_id AND p.is_deleted = false
+                GROUP BY 1 ORDER BY 1
+                """
+            ),
+            {"tag_id": tag.id},
+        )
+    ).all()
+    co_tags = (
+        await db.execute(
+            text(
+                """
+                SELECT t.slug, t.canonical_name, t.labels, count(*) AS cnt
+                FROM post_tags a
+                JOIN post_tags b ON b.post_id = a.post_id AND b.tag_id <> a.tag_id
+                JOIN tags t ON t.id = b.tag_id AND t.status = 'active'
+                WHERE a.tag_id = :tag_id
+                GROUP BY t.slug, t.canonical_name, t.labels
+                ORDER BY cnt DESC LIMIT 12
+                """
+            ),
+            {"tag_id": tag.id},
+        )
+    ).all()
+    span = (
+        await db.execute(
+            select(func.min(Post.date), func.max(Post.date))
+            .join(PostTag, PostTag.post_id == Post.id)
+            .where(PostTag.tag_id == tag.id, Post.is_deleted.is_(False))
+        )
+    ).first()
+    children = (
+        await db.scalars(
+            select(Tag).where(Tag.parent_id == tag.id, Tag.status == "active").order_by(Tag.post_count.desc())
+        )
+    ).all()
+    parent = await db.get(Tag, tag.parent_id) if tag.parent_id else None
+
+    return {
+        **tag_out(tag, dimension_key),
+        "first_post_at": span[0] if span else None,
+        "last_post_at": span[1] if span else None,
+        "histogram": [{"month": b, "count": c} for b, c in histogram],
+        "co_tags": [{"slug": s, "name": n, "labels": lb or {}, "count": c} for s, n, lb, c in co_tags],
+        "children": [tag_out(c, dimension_key) for c in children],
+        "parent": tag_out(parent, dimension_key) if parent else None,
+    }
+
+
+@router.get("/search")
+async def search(
+    q: str | None = None,
+    tags: list[str] | None = Query(default=None),
+    media_kind: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    sort: str = Query("relevance", pattern="^(relevance|newest|oldest|views|reactions)$"),
+    limit: int = Query(20, ge=1, le=50),
+    offset: int = Query(0, ge=0, le=1000),
+    with_facets: bool = True,
+    tenant: Tenant = Depends(require_tenant),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    hits = await hybrid.search(
+        tenant.id,
+        q,
+        tag_slugs=tags or [],
+        date_from=date_from,
+        date_to=date_to,
+        media_kind=media_kind,
+        sort=sort,  # type: ignore[arg-type]
+        limit=limit,
+        offset=offset,
+    )
+    ids = [h[0] for h in hits]
+    items = await _posts_by_ids(db, tenant, ids)
+    out: dict[str, Any] = {
+        "items": items,
+        "count": len(items),
+        "offset": offset,
+        "has_more": len(items) == limit,
+    }
+    if with_facets:
+        out["facets"] = await hybrid.facets(tenant.id, ids)
+    return out
+
+
+@router.get("/posts/{tg_message_id}/related")
+async def related_posts(
+    tg_message_id: int,
+    limit: int = Query(5, ge=1, le=10),
+    tenant: Tenant = Depends(require_tenant),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    channel = await _channel(db, tenant)
+    if channel is None:
+        return {"items": []}
+    post_id = await db.scalar(
+        select(Post.id).where(Post.channel_id == channel.id, Post.tg_message_id == tg_message_id)
+    )
+    if post_id is None:
+        return {"items": []}
+    ids = await hybrid.related(tenant.id, post_id, limit=limit)
+    return {"items": await _posts_by_ids(db, tenant, ids)}
+
+
+@router.get("/posts/{tg_message_id}/tags")
+async def post_tags(
+    tg_message_id: int,
+    tenant: Tenant = Depends(require_tenant),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict]:
+    channel = await _channel(db, tenant)
+    if channel is None:
+        return []
+    post = await db.scalar(
+        select(Post).where(Post.channel_id == channel.id, Post.tg_message_id == tg_message_id)
+    )
+    if post is None:
+        return []
+    post_id = post.id
+    if not post.is_album_root and post.grouped_id:
+        root = await db.scalar(
+            select(Post.id).where(
+                Post.channel_id == channel.id,
+                Post.grouped_id == post.grouped_id,
+                Post.is_album_root.is_(True),
+            )
+        )
+        post_id = root or post_id
+    rows = (
+        await db.execute(
+            select(Tag, Dimension.key, PostTag.confidence)
+            .join(PostTag, PostTag.tag_id == Tag.id)
+            .join(Dimension, Dimension.id == Tag.dimension_id)
+            .where(PostTag.post_id == post_id, Tag.status == "active", Dimension.is_visible.is_(True))
+            .order_by(Dimension.sort_order, Tag.post_count.desc())
+        )
+    ).all()
+    return [{**tag_out(t, key), "confidence": round(conf or 1.0, 2)} for t, key, conf in rows]
+
+
+@router.get("/stats")
+async def stats(tenant: Tenant = Depends(require_tenant), db: AsyncSession = Depends(get_db)) -> dict:
+    """Channel-level numbers for the stats page."""
+    totals = (
+        await db.execute(
+            select(
+                func.count(Post.id),
+                func.coalesce(func.sum(Post.views), 0),
+                func.coalesce(func.avg(Post.views), 0),
+                func.min(Post.date),
+                func.max(Post.date),
+            ).where(Post.tenant_id == tenant.id, Post.is_deleted.is_(False), Post.is_album_root.is_(True))
+        )
+    ).first()
+    by_month = (
+        await db.execute(
+            text(
+                """
+                SELECT to_char(date_trunc('month', date), 'YYYY-MM') AS bucket,
+                       count(*) AS posts, coalesce(avg(views), 0)::int AS mean_views
+                FROM posts
+                WHERE tenant_id = :tenant_id AND is_deleted = false AND is_album_root = true
+                GROUP BY 1 ORDER BY 1
+                """
+            ),
+            {"tenant_id": tenant.id},
+        )
+    ).all()
+    top_tags = (
+        await db.execute(
+            select(Tag, Dimension.key)
+            .join(Dimension, Dimension.id == Tag.dimension_id)
+            .where(
+                Tag.tenant_id == tenant.id,
+                Tag.status == "active",
+                Dimension.key.in_(["themes", "people", "gov_orgs"]),
+            )
+            .order_by(Tag.post_count.desc())
+            .limit(20)
+        )
+    ).all()
+    return {
+        "posts": totals[0] if totals else 0,
+        "total_views": int(totals[1] or 0) if totals else 0,
+        "mean_views": int(totals[2] or 0) if totals else 0,
+        "first_post_at": totals[3] if totals else None,
+        "last_post_at": totals[4] if totals else None,
+        "by_month": [{"month": b, "posts": p, "mean_views": v} for b, p, v in by_month],
+        "top_tags": [tag_out(t, key) for t, key in top_tags],
+    }
