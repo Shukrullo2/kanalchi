@@ -1,13 +1,29 @@
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
+import { ChatView } from "@/components/chat/ChatView";
+import { apiFetchOrNull } from "@/lib/api";
+import type { ChatSuggestions } from "@/lib/types";
 
-export default async function Page() {
-  const t = await getTranslations("common");
+export const metadata = { title: "Ask", robots: { index: false } };
+
+export default async function ChatPage() {
+  const [suggestions, locale, t] = await Promise.all([
+    apiFetchOrNull<ChatSuggestions>("/api/chat/suggestions"),
+    getLocale(),
+    getTranslations("chat"),
+  ]);
+
   return (
-    <div className="card-surface flex flex-col items-center gap-2 p-12 text-center">
-      <span className="text-2xl" aria-hidden>
-        ✳
-      </span>
-      <p className="text-sm text-muted-foreground">{t("comingSoon")}</p>
-    </div>
+    <ChatView
+      suggestions={suggestions ?? { suggestions: [], enabled: true }}
+      locale={locale}
+      labels={{
+        placeholder: t("placeholder"),
+        intro: t("intro"),
+        send: t("send"),
+        thinking: t("thinking"),
+        disabled: t("disabled"),
+        sources: t("sources"),
+      }}
+    />
   );
 }

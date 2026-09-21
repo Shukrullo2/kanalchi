@@ -53,7 +53,15 @@ def channel_block(profile: dict[str, Any] | None, stats: dict[str, Any] | None) 
     payload = {
         "profile": {
             k: profile.get(k)
-            for k in ("title", "one_liner", "topics", "audience", "formality", "language_mix", "posting_style")
+            for k in (
+                "title",
+                "one_liner",
+                "topics",
+                "audience",
+                "formality",
+                "language_mix",
+                "posting_style",
+            )
         }
         if profile
         else None,
@@ -74,7 +82,9 @@ def taxonomy_block(summary: str) -> str:
 def voice_block(voice: dict[str, Any] | None) -> str:
     if not voice:
         return ""
-    return "How this author writes (use it when drafting):\n" + json.dumps(voice, ensure_ascii=False, sort_keys=True)
+    return "How this author writes (use it when drafting):\n" + json.dumps(
+        voice, ensure_ascii=False, sort_keys=True
+    )
 
 
 def turn_context(*, today: str, locale: str, budget_note: str | None = None) -> str:

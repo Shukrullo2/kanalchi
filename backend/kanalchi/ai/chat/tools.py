@@ -78,7 +78,12 @@ def tool_definitions(kind: str = "viewer") -> list[dict[str, Any]]:
             "name": "channel_stats",
             "description": "Overall numbers for the channel: post count, date span, average views, busiest months.",
             "strict": True,
-            "input_schema": {"type": "object", "properties": {}, "required": [], "additionalProperties": False},
+            "input_schema": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": False,
+            },
         },
         {
             "name": "get_posts",
@@ -87,7 +92,11 @@ def tool_definitions(kind: str = "viewer") -> list[dict[str, Any]]:
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "post_ids": {"type": "array", "items": {"type": "integer"}, "description": f"at most {MAX_POSTS} ids"}
+                    "post_ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": f"at most {MAX_POSTS} ids",
+                    }
                 },
                 "required": ["post_ids"],
                 "additionalProperties": False,
@@ -119,10 +128,17 @@ def tool_definitions(kind: str = "viewer") -> list[dict[str, Any]]:
                 "type": "object",
                 "properties": {
                     "query": {"type": "string"},
-                    "tags": {"type": "array", "items": {"type": "string"}, "description": "tag slugs, all must match"},
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "tag slugs, all must match",
+                    },
                     "date_from": {"type": ["string", "null"], "description": "YYYY-MM-DD"},
                     "date_to": {"type": ["string", "null"], "description": "YYYY-MM-DD"},
-                    "sort": {"type": "string", "enum": ["relevance", "newest", "oldest", "views", "reactions"]},
+                    "sort": {
+                        "type": "string",
+                        "enum": ["relevance", "newest", "oldest", "views", "reactions"],
+                    },
                     "limit": {"type": "integer"},
                 },
                 "required": ["query", "tags", "date_from", "date_to", "sort", "limit"],
@@ -278,9 +294,7 @@ class ToolBox:
             stmt = stmt.where(Tag.canonical_norm.like(f"%{normalize(args['query'])}%"))
         async with session_scope() as db:
             rows = (await db.execute(stmt.order_by(Tag.post_count.desc()).limit(limit))).all()
-        return _compact(
-            {"tags": [{"slug": s, "name": n, "posts": c, "dimension": d} for s, n, c, d in rows]}
-        )
+        return _compact({"tags": [{"slug": s, "name": n, "posts": c, "dimension": d} for s, n, c, d in rows]})
 
     async def _tag_overview(self, args: dict[str, Any]) -> str:
         slug = args.get("slug") or ""
@@ -360,7 +374,7 @@ class ToolBox:
         kind = args.get("kind") or "tag"
         granularity = args.get("granularity") or "month"
         trunc = {"month": "month", "quarter": "quarter", "year": "year"}[granularity]
-        fmt = {"month": "YYYY-MM", "quarter": "YYYY-\"Q\"Q", "year": "YYYY"}[granularity]
+        fmt = {"month": "YYYY-MM", "quarter": 'YYYY-"Q"Q', "year": "YYYY"}[granularity]
 
         if kind == "tag":
             async with session_scope() as db:

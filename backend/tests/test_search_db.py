@@ -30,7 +30,7 @@ async def _tenant_id() -> int | None:
         return None
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 async def tenant_id() -> int:
     tid = await _tenant_id()
     if tid is None:

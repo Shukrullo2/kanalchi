@@ -180,3 +180,16 @@ export type ChannelStats = {
   by_month: { month: string; posts: number; mean_views: number }[];
   top_tags: TagOut[];
 };
+
+export type ChatCitation = { id: number; date: string; title: string; url: string };
+
+export type ChatTurn = {
+  role: "user" | "assistant";
+  content: string;
+  citations: number[];
+  cards?: ChatCitation[];
+  pending?: boolean;
+  error?: string | null;
+};
+
+export type ChatSuggestions = { suggestions: string[]; enabled: boolean };

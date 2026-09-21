@@ -47,5 +47,13 @@
     "nothing": "Hech narsa topilmadi.",
     "sortBy": "tartib",
     "clear": "tozalash"
+  },
+  "chat": {
+    "placeholder": "Kanal haqida so'rang…",
+    "intro": "Kanal haqida istalgan savolni bering. Javoblar faqat uning postlariga asoslanadi va asl postga havola beriladi.",
+    "send": "So'rash",
+    "thinking": "arxivdan qidirilmoqda",
+    "disabled": "Bu kanal uchun yordamchi o'chirilgan.",
+    "sources": "Manbalar"
   }
 }

@@ -61,7 +61,10 @@ ignore = ["E501", "B008"]  # B008: FastAPI Depends() in defaults is idiomatic
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-asyncio_default_fixture_loop_scope = "module"
+# One event loop for the whole run: the Redis and database clients are module-level singletons
+# bound to the loop that created them, exactly as they are in the API and worker processes.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
 testpaths = ["tests"]
 
 [tool.mypy]

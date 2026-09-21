@@ -47,5 +47,13 @@
     "nothing": "Nothing found.",
     "sortBy": "sort",
     "clear": "clear filters"
+  },
+  "chat": {
+    "placeholder": "Ask about this channel…",
+    "intro": "Ask anything about this channel. Answers come only from its posts, with links to the originals.",
+    "send": "Ask",
+    "thinking": "looking through the archive",
+    "disabled": "The assistant is turned off for this channel.",
+    "sources": "Sources"
   }
 }
