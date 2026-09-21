@@ -7,11 +7,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import ORJSONResponse
 
-from kanalchi.api.routers import admin, auth, internal, viewer
+from kanalchi.api.routers import admin, auth, internal, onboarding, viewer, webhooks
 from kanalchi.core.db import dispose_engine
 from kanalchi.core.logging import configure_logging, get_logger
 from kanalchi.core.redis import close_redis
 from kanalchi.core.settings import get_settings
+from kanalchi.jobs.app import app as job_app
 
 log = get_logger(__name__)
 
@@ -21,7 +22,8 @@ async def lifespan(app: FastAPI):  # noqa: ANN201
     configure_logging()
     s = get_settings()
     log.info("api.start", env=s.env, admin_host=s.admin_host)
-    yield
+    async with job_app.open_async():  # lets request handlers defer jobs
+        yield
     await close_redis()
     await dispose_engine()
 
@@ -38,7 +40,9 @@ app = FastAPI(
 app.include_router(internal.router)
 app.include_router(auth.router)
 app.include_router(admin.router)
+app.include_router(onboarding.router)
 app.include_router(viewer.router)
+app.include_router(webhooks.router)
 
 
 @app.get("/healthz", include_in_schema=False)

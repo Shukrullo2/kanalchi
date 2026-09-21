@@ -19,7 +19,7 @@ Roles: viewer (public), blogger (`/studio`, Telegram Login + channel-admin check
 - Secrets at rest (Telethon sessions, bot tokens) are Fernet-encrypted (`core/crypto.py`); the API never decrypts sessions.
 
 ## Commands
-`make dev-infra && make migrate && make seed && make api` (:8001) · `make web` (:3001) · `make worker-*` ·
+`make dev-infra && make migrate && make seed && make api` (:8001) · `kanalchi seed-dev --posts 24` for synthetic posts · `make web` (:3001) · `make worker-*` ·
 `make migration m="msg"` · `make test` · `make lint`. Dev ports are offset (5433/6380/9002/8443) to avoid collisions.
 
 ## Conventions

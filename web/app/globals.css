@@ -128,3 +128,10 @@
     @apply font-sans;
   }
 }
+/* Telegram-rendered post bodies */
+.tg-body a { text-decoration: underline; }
+.tg-body pre { overflow-x: auto; border-radius: .5rem; background: var(--muted); padding: .75rem; font-size: .875rem; }
+.tg-body code { border-radius: .25rem; background: var(--muted); padding: .1rem .3rem; font-size: .875em; }
+.tg-body blockquote { border-left: 3px solid var(--border); padding-left: .75rem; color: var(--muted-foreground); }
+.tg-spoiler { background: var(--foreground); border-radius: .25rem; color: transparent; transition: color .15s; }
+.tg-spoiler:hover { background: transparent; color: inherit; }

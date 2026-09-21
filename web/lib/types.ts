@@ -50,3 +50,84 @@ export type AdminOverview = {
   running_jobs: number;
   spend_today_usd: number;
 };
+
+export type MediaOut = {
+  id: number;
+  kind: string;
+  mime: string | null;
+  width: number | null;
+  height: number | null;
+  duration_s: number | null;
+  size_bytes: number | null;
+  file_name: string | null;
+  status: string;
+  url: string | null;
+  thumb_url: string | null;
+  external_url: string | null;
+};
+
+export type LinkOut = { url: string; domain: string; title: string | null; kind: string | null };
+
+export type PostOut = {
+  id: number;
+  date: string;
+  edit_date: string | null;
+  html: string | null;
+  text: string;
+  truncated: boolean;
+  views: number;
+  forwards: number;
+  reactions_total: number;
+  reactions: { emoji?: string; custom_emoji_id?: number; count: number }[];
+  media_kind: string;
+  media: MediaOut[];
+  links: LinkOut[];
+  poll: { question: string; answers: { text: string; voters: number | null }[]; total_voters: number | null } | null;
+  forward_from: { title?: string; username?: string; channel_post?: number } | null;
+  reply_to: number | null;
+  title: string | null;
+  summary: string | null;
+  language: string | null;
+  is_deleted: boolean;
+  url: string;
+  prev_id?: number | null;
+  next_id?: number | null;
+};
+
+export type PostPage = { items: PostOut[]; next_cursor: string | null };
+
+export type Checklist = {
+  tenant_id: number;
+  domain: string;
+  status: string;
+  steps: {
+    channel: { done: boolean; title: string | null; username: string | null; total: number | null; account_id: number | null; noforwards: boolean | null };
+    bot: { done: boolean; username: string | null };
+    domain: { done: boolean; detail: string; resolves: boolean };
+    backfill: { done: boolean; status: string | null; checkpoint: number; total: number | null };
+  };
+};
+
+export type TgAccount = {
+  id: number;
+  phone: string;
+  display_name: string | null;
+  tg_user_id: number | null;
+  status: string;
+  health: Record<string, unknown>;
+  flood_wait_until: string | null;
+  last_seen_at: string | null;
+};
+
+export type JobRunOut = {
+  id: number;
+  tenant_id: number | null;
+  type: string;
+  status: string;
+  progress: { stage?: string; done?: number; total?: number; checkpoint?: number; message?: string };
+  cost_usd: number;
+  error: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+};
