@@ -30,7 +30,7 @@ export default async function TenantsPage() {
               ? Math.min(100, Math.round((x.channel.backfill_checkpoint / x.channel.backfill_total_estimate) * 100))
               : null;
             return (
-              <Link key={x.id} href={`/tenants/${x.id}`} className="card-surface card-hover block p-4">
+              <Link key={x.id} href={`/tenants/${x.id}`} className="card-surface block p-4">
                 <div className="flex items-center gap-2">
                   <StatusDot status={x.status} />
                   <span className="min-w-0 flex-1 truncate font-medium">{x.domain}</span>
@@ -52,7 +52,7 @@ export default async function TenantsPage() {
                 ) : null}
                 <div className="meta-row mt-3">
                   <span>{x.bot_username ? `@${x.bot_username}` : "no bot"}</span>
-                  <span className="divider-dot">${x.daily_chat_budget_usd}/day</span>
+                  <span>${x.daily_chat_budget_usd}/day</span>
                   {x.domain_verified_at ? null : <span className="text-warning">DNS unverified</span>}
                 </div>
               </Link>

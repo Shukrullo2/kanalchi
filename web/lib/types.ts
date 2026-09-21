@@ -12,6 +12,8 @@ export type TenantPublic = {
   locales: string[];
   bot_username: string | null;
   post_count?: number;
+  first_post_at?: string | null;
+  last_post_at?: string | null;
   theme: Record<string, unknown>;
 };
 
@@ -91,8 +93,17 @@ export type PostOut = {
   language: string | null;
   is_deleted: boolean;
   url: string;
+  tags: PostTagOut[];
   prev_id?: number | null;
   next_id?: number | null;
+};
+
+export type PostTagOut = {
+  slug: string;
+  name: string;
+  labels: Record<string, string>;
+  dimension: string | null;
+  post_count: number;
 };
 
 export type PostPage = { items: PostOut[]; next_cursor: string | null };
@@ -158,7 +169,7 @@ export type TagDetail = TagOut & {
   first_post_at: string | null;
   last_post_at: string | null;
   histogram: { month: string; count: number }[];
-  co_tags: { slug: string; name: string; labels: Record<string, string>; count: number }[];
+  co_tags: { slug: string; name: string; labels: Record<string, string>; dimension: string | null; count: number }[];
   children: TagOut[];
   parent: TagOut | null;
 };

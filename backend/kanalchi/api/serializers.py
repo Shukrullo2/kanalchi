@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from kanalchi.core.models import Channel, Media, Post, PostLink
+from kanalchi.core.models import Channel, Dimension, Media, Post, PostLink, PostTag, Tag
 from kanalchi.telegram.ingest import t_me_url
 
 
@@ -32,8 +32,25 @@ def link_out(link: PostLink) -> dict[str, Any]:
     return {"url": link.url, "domain": link.domain, "title": link.title, "kind": link.kind}
 
 
+def post_tag_out(tag: Tag, dimension_key: str | None) -> dict[str, Any]:
+    """The subset a post row needs: enough to label a tag and colour it by tier."""
+    return {
+        "slug": tag.slug,
+        "name": tag.canonical_name,
+        "labels": tag.labels or {},
+        "dimension": dimension_key,
+        "post_count": tag.post_count,
+    }
+
+
 def post_out(
-    p: Post, channel: Channel, media: list[Media], links: list[PostLink], *, full: bool = False
+    p: Post,
+    channel: Channel,
+    media: list[Media],
+    links: list[PostLink],
+    tags: list[dict[str, Any]] | None = None,
+    *,
+    full: bool = False,
 ) -> dict[str, Any]:
     text = p.text or ""
     out = {
@@ -58,6 +75,7 @@ def post_out(
         "language": p.language,
         "is_deleted": p.is_deleted,
         "url": t_me_url(channel, p.tg_message_id),
+        "tags": tags or [],
     }
     return out
 
@@ -96,3 +114,27 @@ async def attach_media_links(
     for link in links:
         links_by.setdefault(link.post_id, []).append(link)
     return media_by, links_by
+
+
+async def attach_tags(db: AsyncSession, posts: list[Post]) -> dict[int, list[dict[str, Any]]]:
+    """Tags for a page of posts in one query.
+
+    The timeline shows them under every entry, so this is on the hot path: it is
+    a single join rather than a lookup per post, and it is ordered by how much
+    of the archive a tag covers so the most useful ones survive truncation.
+    """
+    if not posts:
+        return {}
+    rows = (
+        await db.execute(
+            select(PostTag.post_id, Tag, Dimension.key)
+            .join(Tag, Tag.id == PostTag.tag_id)
+            .outerjoin(Dimension, Dimension.id == Tag.dimension_id)
+            .where(PostTag.post_id.in_([p.id for p in posts]), Tag.status == "active")
+            .order_by(PostTag.post_id, Tag.post_count.desc())
+        )
+    ).all()
+    out: dict[int, list[dict[str, Any]]] = {}
+    for post_id, tag, dimension_key in rows:
+        out.setdefault(post_id, []).append(post_tag_out(tag, dimension_key))
+    return out

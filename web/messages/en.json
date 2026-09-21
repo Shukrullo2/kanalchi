@@ -24,7 +24,11 @@
   },
   "home": {
     "emptyTitle": "Nothing here yet",
-    "emptyBody": "Posts will appear as soon as the channel history is imported."
+    "emptyBody": "Posts appear as soon as the channel history is imported.",
+    "indexThemes": "What this channel writes about",
+    "indexEntities": "Who and what it names",
+    "indexAll": "Browse the full index",
+    "subscribers": "{count} subscribers"
   },
   "studio": {
     "title": "Studio",

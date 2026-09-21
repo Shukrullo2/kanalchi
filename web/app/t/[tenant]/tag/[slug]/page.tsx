@@ -9,6 +9,7 @@ import { TagChip } from "@/components/tags/TagChip";
 import { apiFetch, apiFetchOrNull } from "@/lib/api";
 import { tagLabel } from "@/lib/labels";
 import type { EntitySummaryOut, SearchResult, TagDetail, TenantPublic } from "@/lib/types";
+import { tierOf, toneVar } from "@/lib/dimensions";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -35,20 +36,20 @@ export default async function TagPage({ params }: Props) {
     apiFetch<SearchResult>(`/api/search?tags=${encodeURIComponent(slug)}&sort=newest&limit=20&with_facets=false`),
     apiFetchOrNull<EntitySummaryOut>(`/api/tags/${encodeURIComponent(slug)}/summary`),
   ]);
-  const tone = `var(--dim-${tag.dimension ?? "default"}, var(--dim-default))`;
-  const years =
-    tag.first_post_at && tag.last_post_at
-      ? `${new Date(tag.first_post_at).getFullYear()}–${new Date(tag.last_post_at).getFullYear()}`
-      : null;
+  const tone = toneVar(tag.dimension);
+  const firstYear = tag.first_post_at ? new Date(tag.first_post_at).getFullYear() : null;
+  const lastYear = tag.last_post_at ? new Date(tag.last_post_at).getFullYear() : null;
+  const years = firstYear && lastYear ? (firstYear === lastYear ? `${firstYear}` : `${firstYear}–${lastYear}`) : null;
+  const coTags = tag.co_tags.filter((c) => tierOf(c.dimension) !== "meta");
 
   return (
-    <div className="space-y-5">
-      <header className="card-surface space-y-3 p-4 sm:p-5">
+    <div>
+      <header className="space-y-4 border-b pb-6">
         <div className="flex items-start gap-3">
-          <span className="mt-2 inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: tone }} aria-hidden />
+          <span className="mt-3 inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: tone }} aria-hidden />
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-baseline gap-2">
-              <h1 className="text-balance text-xl font-semibold tracking-tight">{tagLabel(tag, locale)}</h1>
+            <div className="flex flex-wrap items-baseline gap-2.5">
+              <h1 className="text-balance text-[1.75rem] font-semibold tracking-tight">{tagLabel(tag, locale)}</h1>
               {tag.dimension ? (
                 <Link href={`/tags/${tag.dimension}`} className="text-xs text-muted-foreground hover:text-foreground">
                   {tag.dimension}
@@ -59,21 +60,21 @@ export default async function TagPage({ params }: Props) {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 text-center sm:max-w-sm">
+        <div className="flex flex-wrap gap-x-10 gap-y-3">
           <div className="stat-tile">
             <div className="stat-value">{tag.post_count}</div>
             <div className="stat-label">posts</div>
           </div>
           {years ? (
             <div className="stat-tile">
-              <div className="stat-value text-base">{years}</div>
-              <div className="stat-label">covered</div>
+              <div className="stat-value text-[1.25rem]">{years}</div>
+              <div className="stat-label">{firstYear === lastYear ? "year" : "years"}</div>
             </div>
           ) : null}
           {tag.engagement_score ? (
             <div className="stat-tile">
               <div className="stat-value">{tag.engagement_score}×</div>
-              <div className="stat-label">reach</div>
+              <div className="stat-label">of average views</div>
             </div>
           ) : null}
         </div>
@@ -94,10 +95,10 @@ export default async function TagPage({ params }: Props) {
           </div>
         ) : null}
 
-        {tag.co_tags.length > 0 ? (
+        {coTags.length > 0 ? (
           <div className="flex flex-wrap items-center gap-1.5 border-t pt-3">
-            <span className="text-xs text-muted-foreground">often with</span>
-            {tag.co_tags.slice(0, 8).map((c) => (
+            <span className="text-xs text-muted-foreground">Usually appears with</span>
+            {coTags.slice(0, 8).map((c) => (
               <Link key={c.slug} href={`/tag/${c.slug}`} className="chip hover:bg-border">
                 {c.labels?.[locale] || c.name}
                 <span className="tag-count">{c.count}</span>
@@ -108,11 +109,9 @@ export default async function TagPage({ params }: Props) {
       </header>
 
       {summary?.available ? (
-        <section className="card-surface p-4 sm:p-5">
-          <h2 className="mb-1.5 text-xs uppercase tracking-wider text-muted-foreground">
-            What this channel has said
-          </h2>
-          <p className="text-pretty text-sm leading-relaxed">
+        <section className="mt-6 border-l-2 pl-4" style={{ borderColor: tone }}>
+          <h2 className="mb-1.5 text-sm text-muted-foreground">What this channel has said</h2>
+          <p className="text-pretty leading-relaxed">
             {summary.summary[locale] ?? summary.summary.en}
           </p>
           {summary.citations.length > 0 ? (
@@ -127,17 +126,16 @@ export default async function TagPage({ params }: Props) {
         </section>
       ) : null}
 
-      <div className="space-y-3.5">
-        {results.items.map((p, i) => (
-          <div key={p.id} className="animate-rise" style={{ animationDelay: `${Math.min(i, 8) * 25}ms` }}>
-            <PostCard post={p} locale={locale} />
-          </div>
+      <div className="register mt-8 border-t">
+        {results.items.map((p) => (
+          <PostCard key={p.id} post={p} locale={locale} />
         ))}
       </div>
 
       {results.has_more ? (
-        <Link href={`/search?tags=${encodeURIComponent(slug)}`} className="btn-ghost w-full justify-center">
-          see all {tag.post_count} posts <ArrowRightIcon size={14} />
+        <Link href={`/search?tags=${encodeURIComponent(slug)}`} className="btn-ghost mt-6 w-full justify-center">
+          See all {tag.post_count} posts
+          <ArrowRightIcon size={14} />
         </Link>
       ) : null}
     </div>

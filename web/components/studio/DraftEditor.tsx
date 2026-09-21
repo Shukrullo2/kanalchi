@@ -205,7 +205,7 @@ export function DraftEditor({ initial, botUsername }: { initial: DraftOut; botUs
         </section>
 
         <section className="space-y-2">
-          <div className="text-xs uppercase tracking-wider text-muted-foreground">Preview</div>
+          <div className="text-xs text-muted-foreground">Preview</div>
           <div className="rounded-xl bg-surface-2 p-4">
             <div className="max-w-md rounded-2xl rounded-bl-sm bg-surface p-3 shadow-sm">
               {(draft.media ?? []).length > 0 ? (
@@ -228,7 +228,7 @@ export function DraftEditor({ initial, botUsername }: { initial: DraftOut; botUs
 
           {draft.suggested_tags.length > 0 ? (
             <div className="space-y-1.5">
-              <div className="text-xs uppercase tracking-wider text-muted-foreground">Will be tagged</div>
+              <div className="text-xs text-muted-foreground">Will be filed under</div>
               <div className="flex flex-wrap gap-1.5">
                 {draft.suggested_tags.map((t) => (
                   <TagChip key={t.slug} tag={t} locale="uz" />

@@ -96,7 +96,7 @@ export function IdeaBoard({ initial }: { initial: IdeaOut[] }) {
               }}
               className="rounded-xl bg-surface-2 p-2"
             >
-              <h2 className="mb-2 flex items-baseline justify-between px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              <h2 className="mb-2 flex items-baseline justify-between px-1 text-[0.8125rem] font-medium text-muted-foreground">
                 {column.label}
                 <span>{items.length}</span>
               </h2>

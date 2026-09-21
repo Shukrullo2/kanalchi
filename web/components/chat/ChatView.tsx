@@ -134,7 +134,7 @@ export function ChatView({
                 ) : null}
                 {turn.cards && turn.cards.length > 0 ? (
                   <div className="space-y-1.5">
-                    <div className="text-[0.65rem] uppercase tracking-wider text-muted-foreground">
+                    <div className="text-xs text-muted-foreground">
                       {labels.sources}
                     </div>
                     <ul className="space-y-1">

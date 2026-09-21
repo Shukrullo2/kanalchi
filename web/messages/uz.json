@@ -24,7 +24,11 @@
   },
   "home": {
     "emptyTitle": "Hozircha bo‘sh",
-    "emptyBody": "Kanal tarixi import qilinishi bilan postlar shu yerda paydo bo‘ladi."
+    "emptyBody": "Kanal tarixi yuklangach, postlar shu yerda paydo bo‘ladi.",
+    "indexThemes": "Kanal nima haqida yozadi",
+    "indexEntities": "Kimni va nimani tilga oladi",
+    "indexAll": "To‘liq ko‘rsatkich",
+    "subscribers": "{count} obunachi"
   },
   "studio": {
     "title": "Studiya",

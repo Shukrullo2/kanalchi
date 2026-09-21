@@ -27,7 +27,7 @@ export default async function TopPage({ searchParams }: Props) {
     <div className="space-y-5">
       <header className="flex items-center gap-2">
         <FlameIcon size={18} className="text-primary" />
-        <h1 className="text-xl font-semibold tracking-tight">Top posts</h1>
+        <h1 className="text-[1.75rem] font-semibold tracking-tight">Most read</h1>
       </header>
 
       <div className="flex flex-wrap gap-3 text-xs">
@@ -59,13 +59,10 @@ export default async function TopPage({ searchParams }: Props) {
         </div>
       </div>
 
-      <ol className="space-y-3.5">
+      <ol className="register mt-6 border-t">
         {data.items.map((p, i) => (
-          <li key={p.id} className="relative animate-rise" style={{ animationDelay: `${Math.min(i, 8) * 25}ms` }}>
-            <span className="absolute -left-1 -top-1 z-10 grid h-6 w-6 place-items-center rounded-full bg-primary text-[0.7rem] font-semibold text-primary-foreground shadow-sm">
-              {i + 1}
-            </span>
-            <PostCard post={p} locale={locale} />
+          <li key={p.id}>
+            <PostCard post={p} locale={locale} rank={i + 1} />
           </li>
         ))}
       </ol>

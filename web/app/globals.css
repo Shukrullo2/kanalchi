@@ -11,11 +11,16 @@
 }
 
 /* ============================================================================
-   Kanalchi design system
+   Kanalchi
 
-   A reading surface first: the archive is text, so the type does the work.
-   Sans (Onest) for interface, serif (Source Serif 4) for post bodies, both with
-   Cyrillic so Uzbek Cyrillic and Russian render in the same voice as Latin.
+   The subject is an archive of a Telegram channel, so the page is built like a
+   register: entries hanging off a date margin, month markers between runs. The
+   date column is information, not ornament — it is how you find your way
+   through twenty thousand messages.
+
+   Colour is Timurid tile: cobalt and madder on cool paper. It carries exactly
+   two meanings — cobalt for what a post is about, madder for who or what it
+   names — and everything else in the page is ink and paper.
    ========================================================================== */
 
 @theme inline {
@@ -48,184 +53,152 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  --radius-sm: calc(var(--radius) * 0.5);
-  --radius-md: calc(var(--radius) * 0.75);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.5);
-  --radius-2xl: calc(var(--radius) * 2);
-  --radius-3xl: calc(var(--radius) * 2.75);
+  /* Radius by role, not one value on everything: controls sit tighter than
+     panels, media rounds more than either. */
+  --radius-sm: var(--r-tight);
+  --radius-md: var(--r-control);
+  --radius-lg: var(--r-media);
+  --radius-xl: var(--r-panel);
+  --radius-2xl: calc(var(--r-panel) + 0.25rem);
+  --radius-3xl: calc(var(--r-panel) + 0.75rem);
 
-  --shadow-xs: 0 1px 2px 0 oklch(0.2 0.03 265 / 0.04);
-  --shadow-sm: 0 1px 3px 0 oklch(0.2 0.03 265 / 0.06), 0 1px 2px -1px oklch(0.2 0.03 265 / 0.05);
-  --shadow-md: 0 4px 16px -4px oklch(0.2 0.03 265 / 0.1), 0 2px 6px -2px oklch(0.2 0.03 265 / 0.06);
-  --shadow-lg: 0 12px 32px -8px oklch(0.2 0.03 265 / 0.14), 0 4px 12px -4px oklch(0.2 0.03 265 / 0.08);
-
-  --animate-rise: rise 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
-  --animate-fade: fade 0.25s ease-out both;
-}
-
-@keyframes rise {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: none; }
-}
-@keyframes fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-md: 0 6px 24px -10px var(--shadow-ink);
+  --shadow-lg: 0 18px 48px -18px var(--shadow-ink);
 }
 
 :root {
   color-scheme: light;
-  /* Warm paper rather than pure white: long reading sessions, less glare. */
-  --background: oklch(0.992 0.003 85);
+
+  /* Cool paper with a faint blue cast — not the warm cream every generated
+     page reaches for, and it sits under cobalt without going muddy. */
+  --background: oklch(0.982 0.004 260);
   --surface: oklch(1 0 0);
-  --surface-2: oklch(0.975 0.004 85);
-  --foreground: oklch(0.21 0.02 268);
+  --surface-2: oklch(0.962 0.005 260);
+  --foreground: oklch(0.26 0.032 264);
 
   --card: oklch(1 0 0);
   --card-foreground: var(--foreground);
   --popover: oklch(1 0 0);
   --popover-foreground: var(--foreground);
 
-  --primary: oklch(0.52 0.19 274);
-  --primary-foreground: oklch(0.99 0.005 274);
-  --secondary: oklch(0.96 0.006 270);
-  --secondary-foreground: oklch(0.3 0.03 268);
+  /* #3A5BD0 — validated against the paper for contrast, chroma and CVD. */
+  --primary: oklch(0.505 0.178 268);
+  --primary-foreground: oklch(0.99 0.004 260);
+  --secondary: oklch(0.955 0.007 262);
+  --secondary-foreground: oklch(0.32 0.035 264);
 
-  --muted: oklch(0.965 0.004 85);
-  --muted-foreground: oklch(0.52 0.015 268);
-  --accent: oklch(0.955 0.022 274);
-  --accent-foreground: oklch(0.38 0.14 274);
+  --muted: oklch(0.958 0.005 260);
+  --muted-foreground: oklch(0.505 0.018 264);
+  --accent: oklch(0.945 0.028 268);
+  --accent-foreground: oklch(0.38 0.15 268);
 
-  --destructive: oklch(0.58 0.21 25);
-  --success: oklch(0.6 0.14 155);
-  --warning: oklch(0.72 0.15 75);
+  --destructive: oklch(0.55 0.2 27);
+  --success: oklch(0.55 0.13 158);
+  --warning: oklch(0.68 0.14 72);
 
-  --border: oklch(0.915 0.006 270);
-  --border-strong: oklch(0.86 0.008 270);
-  --input: oklch(0.915 0.006 270);
-  --ring: oklch(0.52 0.19 274);
+  --border: oklch(0.912 0.007 262);
+  --border-strong: oklch(0.84 0.011 262);
+  --rule: oklch(0.928 0.006 262);
+  --input: oklch(0.9 0.008 262);
+  --ring: oklch(0.505 0.178 268);
+  --shadow-ink: oklch(0.26 0.06 264 / 0.18);
 
-  --radius: 0.75rem;
+  --r-tight: 0.3rem;
+  --r-control: 0.5rem;
+  --r-media: 0.625rem;
+  --r-panel: 0.875rem;
 
-  /* One hue per tag dimension, so a tag's kind is readable at a glance. */
-  --dim-themes: oklch(0.55 0.17 274);
-  --dim-people: oklch(0.58 0.16 25);
-  --dim-gov_orgs: oklch(0.52 0.15 235);
-  --dim-orgs: oklch(0.55 0.14 195);
-  --dim-locations: oklch(0.56 0.15 150);
-  --dim-products: oklch(0.6 0.15 320);
-  --dim-events: oklch(0.62 0.15 55);
-  --dim-laws: oklch(0.5 0.1 260);
-  --dim-media_outlets: oklch(0.55 0.12 340);
-  --dim-link_domains: oklch(0.52 0.02 268);
-  --dim-hashtags: oklch(0.55 0.13 210);
-  --dim-format: oklch(0.52 0.02 268);
-  --dim-stance: oklch(0.58 0.13 95);
-  --dim-language: oklch(0.52 0.02 268);
-  --dim-media_type: oklch(0.52 0.02 268);
-  --dim-default: oklch(0.52 0.02 268);
+  /* Two tones and a neutral. Cobalt = what the post is about. Madder = a person,
+     body or place it names. Everything procedural stays ink. */
+  --tone-theme: oklch(0.505 0.178 268);
+  --tone-entity: oklch(0.545 0.163 27);
+  --tone-meta: oklch(0.505 0.018 264);
+
+  --margin-w: 4.75rem;
 }
 
 .dark {
   color-scheme: dark;
-  /* Deep ink with a blue cast; cards lift off the page instead of being outlined. */
-  --background: oklch(0.165 0.014 268);
-  --surface: oklch(0.205 0.016 268);
-  --surface-2: oklch(0.235 0.018 268);
-  --foreground: oklch(0.95 0.006 268);
 
-  --card: oklch(0.205 0.016 268);
+  /* Deep blue ink. Entries sit directly on it; there is no card to lift. */
+  --background: oklch(0.183 0.019 265);
+  --surface: oklch(0.223 0.021 265);
+  --surface-2: oklch(0.256 0.022 265);
+  --foreground: oklch(0.935 0.008 265);
+
+  --card: oklch(0.223 0.021 265);
   --card-foreground: var(--foreground);
-  --popover: oklch(0.225 0.017 268);
+  --popover: oklch(0.245 0.022 265);
   --popover-foreground: var(--foreground);
 
-  --primary: oklch(0.72 0.16 274);
-  --primary-foreground: oklch(0.17 0.02 274);
-  --secondary: oklch(0.26 0.018 268);
-  --secondary-foreground: oklch(0.92 0.008 268);
+  /* #6D85DC — re-picked for this surface, not lightened from the light step. */
+  --primary: oklch(0.645 0.135 268);
+  --primary-foreground: oklch(0.15 0.02 268);
+  --secondary: oklch(0.272 0.022 265);
+  --secondary-foreground: oklch(0.92 0.01 265);
 
-  --muted: oklch(0.245 0.016 268);
-  --muted-foreground: oklch(0.68 0.015 268);
-  --accent: oklch(0.29 0.045 274);
-  --accent-foreground: oklch(0.85 0.1 274);
+  --muted: oklch(0.252 0.02 265);
+  --muted-foreground: oklch(0.685 0.018 265);
+  --accent: oklch(0.3 0.05 268);
+  --accent-foreground: oklch(0.84 0.1 268);
 
-  --destructive: oklch(0.65 0.19 25);
-  --success: oklch(0.7 0.14 155);
-  --warning: oklch(0.78 0.14 75);
+  --destructive: oklch(0.64 0.18 27);
+  --success: oklch(0.68 0.13 158);
+  --warning: oklch(0.76 0.13 72);
 
-  --border: oklch(0.29 0.018 268);
-  --border-strong: oklch(0.38 0.02 268);
-  --input: oklch(0.3 0.018 268);
-  --ring: oklch(0.72 0.16 274);
+  --border: oklch(0.298 0.021 265);
+  --border-strong: oklch(0.4 0.024 265);
+  --rule: oklch(0.275 0.02 265);
+  --input: oklch(0.32 0.022 265);
+  --ring: oklch(0.645 0.135 268);
+  --shadow-ink: oklch(0.08 0.03 265 / 0.6);
 
-  --dim-themes: oklch(0.75 0.15 274);
-  --dim-people: oklch(0.76 0.14 25);
-  --dim-gov_orgs: oklch(0.74 0.13 235);
-  --dim-orgs: oklch(0.75 0.12 195);
-  --dim-locations: oklch(0.75 0.13 150);
-  --dim-products: oklch(0.77 0.13 320);
-  --dim-events: oklch(0.79 0.13 55);
-  --dim-laws: oklch(0.72 0.09 260);
-  --dim-media_outlets: oklch(0.74 0.11 340);
-  --dim-link_domains: oklch(0.7 0.015 268);
-  --dim-hashtags: oklch(0.74 0.12 210);
-  --dim-format: oklch(0.7 0.015 268);
-  --dim-stance: oklch(0.78 0.12 95);
-  --dim-language: oklch(0.7 0.015 268);
-  --dim-media_type: oklch(0.7 0.015 268);
-  --dim-default: oklch(0.7 0.015 268);
+  --tone-theme: oklch(0.645 0.135 268);
+  --tone-entity: oklch(0.645 0.135 27);
+  --tone-meta: oklch(0.685 0.018 265);
 }
 
 /* Users who never touch the toggle follow their system setting; an explicit .light opts out. */
 @media (prefers-color-scheme: dark) {
   :root:not(.light) {
     color-scheme: dark;
-    /* Deep ink with a blue cast; cards lift off the page instead of being outlined. */
-    --background: oklch(0.165 0.014 268);
-    --surface: oklch(0.205 0.016 268);
-    --surface-2: oklch(0.235 0.018 268);
-    --foreground: oklch(0.95 0.006 268);
 
-    --card: oklch(0.205 0.016 268);
+    --background: oklch(0.183 0.019 265);
+    --surface: oklch(0.223 0.021 265);
+    --surface-2: oklch(0.256 0.022 265);
+    --foreground: oklch(0.935 0.008 265);
+
+    --card: oklch(0.223 0.021 265);
     --card-foreground: var(--foreground);
-    --popover: oklch(0.225 0.017 268);
+    --popover: oklch(0.245 0.022 265);
     --popover-foreground: var(--foreground);
 
-    --primary: oklch(0.72 0.16 274);
-    --primary-foreground: oklch(0.17 0.02 274);
-    --secondary: oklch(0.26 0.018 268);
-    --secondary-foreground: oklch(0.92 0.008 268);
+    --primary: oklch(0.645 0.135 268);
+    --primary-foreground: oklch(0.15 0.02 268);
+    --secondary: oklch(0.272 0.022 265);
+    --secondary-foreground: oklch(0.92 0.01 265);
 
-    --muted: oklch(0.245 0.016 268);
-    --muted-foreground: oklch(0.68 0.015 268);
-    --accent: oklch(0.29 0.045 274);
-    --accent-foreground: oklch(0.85 0.1 274);
+    --muted: oklch(0.252 0.02 265);
+    --muted-foreground: oklch(0.685 0.018 265);
+    --accent: oklch(0.3 0.05 268);
+    --accent-foreground: oklch(0.84 0.1 268);
 
-    --destructive: oklch(0.65 0.19 25);
-    --success: oklch(0.7 0.14 155);
-    --warning: oklch(0.78 0.14 75);
+    --destructive: oklch(0.64 0.18 27);
+    --success: oklch(0.68 0.13 158);
+    --warning: oklch(0.76 0.13 72);
 
-    --border: oklch(0.29 0.018 268);
-    --border-strong: oklch(0.38 0.02 268);
-    --input: oklch(0.3 0.018 268);
-    --ring: oklch(0.72 0.16 274);
+    --border: oklch(0.298 0.021 265);
+    --border-strong: oklch(0.4 0.024 265);
+    --rule: oklch(0.275 0.02 265);
+    --input: oklch(0.32 0.022 265);
+    --ring: oklch(0.645 0.135 268);
+    --shadow-ink: oklch(0.08 0.03 265 / 0.6);
 
-    --dim-themes: oklch(0.75 0.15 274);
-    --dim-people: oklch(0.76 0.14 25);
-    --dim-gov_orgs: oklch(0.74 0.13 235);
-    --dim-orgs: oklch(0.75 0.12 195);
-    --dim-locations: oklch(0.75 0.13 150);
-    --dim-products: oklch(0.77 0.13 320);
-    --dim-events: oklch(0.79 0.13 55);
-    --dim-laws: oklch(0.72 0.09 260);
-    --dim-media_outlets: oklch(0.74 0.11 340);
-    --dim-link_domains: oklch(0.7 0.015 268);
-    --dim-hashtags: oklch(0.74 0.12 210);
-    --dim-format: oklch(0.7 0.015 268);
-    --dim-stance: oklch(0.78 0.12 95);
-    --dim-language: oklch(0.7 0.015 268);
-    --dim-media_type: oklch(0.7 0.015 268);
-    --dim-default: oklch(0.7 0.015 268);
+    --tone-theme: oklch(0.645 0.135 268);
+    --tone-entity: oklch(0.645 0.135 27);
+    --tone-meta: oklch(0.685 0.018 265);
   }
 }
 
@@ -235,29 +208,29 @@
   }
   html {
     -webkit-tap-highlight-color: transparent;
-    scroll-behavior: smooth;
   }
   body {
     background: var(--background);
     color: var(--foreground);
-    font-feature-settings: "cv02", "cv03", "cv04", "ss01";
+    font-size: 0.9375rem;
+    line-height: 1.55;
     text-rendering: optimizeLegibility;
   }
   ::selection {
-    background: var(--accent);
-    color: var(--accent-foreground);
+    background: color-mix(in oklch, var(--primary) 22%, transparent);
   }
   :focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
+    border-radius: 2px;
   }
   h1, h2, h3, h4 {
     font-family: var(--font-sans);
-    letter-spacing: -0.021em;
-    font-weight: 620;
+    font-weight: 600;
+    letter-spacing: -0.015em;
   }
-  /* Scrollbar that does not shout */
-  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  h1 { letter-spacing: -0.024em; }
+  ::-webkit-scrollbar { width: 11px; height: 11px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb {
     background: var(--border-strong);
@@ -268,54 +241,134 @@
 }
 
 @layer components {
-  /* --- Telegram post body -------------------------------------------------
-     Serif at a comfortable measure; the channel's own formatting is preserved,
-     so these rules only set rhythm and colour, never structure. */
+  /* The one measure everything aligns to: wide enough for a date margin plus a
+     68-character line, narrow enough that the line never runs long. */
+  .shell {
+    margin-inline: auto;
+    width: 100%;
+    max-width: 52rem;
+    padding-inline: 1.25rem;
+  }
+
+  /* --- The register ------------------------------------------------------
+     An entry is a row hanging off the date margin. On phones the margin folds
+     into a line above the text, because 4.75rem of a 375px screen is not a
+     margin, it is a third of the page. */
+  .register { display: flex; flex-direction: column; }
+
+  .entry {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.5rem 1.5rem;
+    padding: 1.4rem 0;
+    border-top: 1px solid var(--rule);
+  }
+  .entry:first-child { border-top: none; }
+
+  .entry-margin {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    color: var(--muted-foreground);
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.4;
+  }
+  .entry-body { min-width: 0; }
+
+  @media (min-width: 40rem) {
+    .entry { grid-template-columns: var(--margin-w) minmax(0, 1fr); }
+    .entry-margin {
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 0.15rem;
+      text-align: right;
+      position: sticky;
+      top: 4.75rem;
+      align-self: start;
+    }
+  }
+
+  .entry-day { color: var(--foreground); font-weight: 500; }
+  .entry-rank {
+    font-size: 1.125rem;
+    font-weight: 600;
+    line-height: 1;
+    color: var(--border-strong);
+  }
+
+  /* Month markers break the run without shouting; they stay put while the
+     month's entries scroll past them. */
+  .month-mark {
+    position: sticky;
+    top: 3.5rem;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    padding: 0.9rem 0 0.55rem;
+    /* Solid, not a fade: a gradient to transparent let the entry underneath show
+       through the marker as it scrolled past. */
+    background: var(--background);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--muted-foreground);
+    font-variant-numeric: tabular-nums;
+  }
+  .month-mark::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--rule);
+  }
+
+  /* --- Telegram post body ------------------------------------------------ */
   .tg-body {
     font-family: var(--font-serif);
     font-size: 1.0625rem;
-    line-height: 1.65;
-    letter-spacing: -0.003em;
+    line-height: 1.62;
+    max-width: 68ch;
     overflow-wrap: anywhere;
   }
   .tg-body a {
     color: var(--primary);
     text-decoration: underline;
     text-decoration-thickness: 1px;
-    text-underline-offset: 2px;
-    transition: opacity 0.15s;
+    text-underline-offset: 0.18em;
+    text-decoration-color: color-mix(in oklch, var(--primary) 40%, transparent);
+    transition: text-decoration-color 0.15s;
   }
-  .tg-body a:hover { opacity: 0.75; }
-  .tg-body strong { font-weight: 640; }
+  .tg-body a:hover { text-decoration-color: currentColor; }
+  .tg-body strong { font-weight: 600; }
   .tg-body pre {
     font-family: var(--font-mono);
-    font-size: 0.85em;
+    font-size: 0.82em;
     line-height: 1.5;
     background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    padding: 0.75rem 0.9rem;
+    border-radius: var(--r-control);
+    padding: 0.7rem 0.85rem;
     overflow-x: auto;
-    margin: 0.75rem 0;
+    margin: 0.7rem 0;
   }
   .tg-body code {
     font-family: var(--font-mono);
-    font-size: 0.85em;
+    font-size: 0.82em;
     background: var(--surface-2);
-    border-radius: var(--radius-sm);
-    padding: 0.1rem 0.35rem;
+    border-radius: var(--r-tight);
+    padding: 0.1rem 0.32rem;
   }
   .tg-body pre code { background: none; padding: 0; }
   .tg-body blockquote {
-    border-left: 3px solid var(--border-strong);
+    border-left: 2px solid color-mix(in oklch, var(--primary) 45%, transparent);
     padding-left: 0.9rem;
-    margin: 0.75rem 0;
+    margin: 0.7rem 0;
     color: var(--muted-foreground);
+    font-style: italic;
   }
   .tg-spoiler {
     background: var(--foreground);
     color: transparent;
-    border-radius: var(--radius-sm);
+    border-radius: var(--r-tight);
     cursor: pointer;
     transition: color 0.2s, background 0.2s;
   }
@@ -323,86 +376,161 @@
     background: var(--surface-2);
     color: inherit;
   }
-  .tg-hashtag { color: var(--primary); text-decoration: none; }
+  .tg-hashtag { color: var(--muted-foreground); text-decoration: none; }
+  .tg-hashtag:hover { color: var(--foreground); }
 
-  /* --- Surfaces ---------------------------------------------------------- */
-  .card-surface {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-xl);
-    box-shadow: var(--shadow-xs);
-  }
-  .card-hover {
-    transition: box-shadow 0.2s cubic-bezier(0.22, 1, 0.36, 1),
-                transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
-                border-color 0.2s;
-  }
-  .card-hover:hover {
-    box-shadow: var(--shadow-md);
-    border-color: var(--border-strong);
-    transform: translateY(-1px);
-  }
-  .glass {
-    background: color-mix(in oklch, var(--background) 82%, transparent);
-    backdrop-filter: saturate(180%) blur(14px);
-    -webkit-backdrop-filter: saturate(180%) blur(14px);
-  }
-
-  /* --- Tag pills: tinted by dimension ------------------------------------ */
-  .tag-pill {
-    --tone: var(--dim-default);
+  /* --- Tags: two tones and a neutral -------------------------------------
+     In a post's own row a tag is a word with a tone dot — a row of eight reads
+     as a sentence rather than as confetti. On browse pages, where tags are the
+     targets, they take a pill with a real hit area. */
+  .tag {
+    --tone: var(--tone-meta);
     display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
+    gap: 0.34rem;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+    transition: color 0.15s;
+  }
+  .tag::before {
+    content: "";
+    width: 0.3125rem;
+    height: 0.3125rem;
     border-radius: 9999px;
-    border: 1px solid color-mix(in oklch, var(--tone) 24%, transparent);
-    background: color-mix(in oklch, var(--tone) 9%, var(--surface));
-    color: color-mix(in oklch, var(--tone) 82%, var(--foreground));
-    padding: 0.2rem 0.6rem;
+    background: var(--tone);
+    flex: none;
+  }
+  .tag:hover { color: var(--foreground); }
+  .tag[data-tier="meta"] { color: color-mix(in oklch, var(--muted-foreground) 88%, transparent); }
+  .tag[data-tier="meta"]::before { display: none; }
+  .tag[data-tier="theme"] { --tone: var(--tone-theme); }
+  .tag[data-tier="entity"] { --tone: var(--tone-entity); }
+
+  .tag-pill {
+    --tone: var(--tone-meta);
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    border-radius: 9999px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--foreground);
+    padding: 0.28rem 0.7rem;
     font-size: 0.8125rem;
     line-height: 1.35;
     white-space: nowrap;
-    transition: background 0.15s, border-color 0.15s, transform 0.15s;
+    transition: border-color 0.15s, background 0.15s;
   }
   .tag-pill:hover {
-    background: color-mix(in oklch, var(--tone) 17%, var(--surface));
-    border-color: color-mix(in oklch, var(--tone) 42%, transparent);
+    border-color: color-mix(in oklch, var(--tone) 55%, var(--border));
+    background: color-mix(in oklch, var(--tone) 6%, var(--surface));
   }
+  .tag-pill[data-tier="theme"] { --tone: var(--tone-theme); }
+  .tag-pill[data-tier="entity"] { --tone: var(--tone-entity); }
+  /* Same dot as the inline form, so a tag looks like itself wherever it appears. */
+  .tag-pill[data-tier="theme"]::before,
+  .tag-pill[data-tier="entity"]::before {
+    content: "";
+    width: 0.3125rem;
+    height: 0.3125rem;
+    border-radius: 9999px;
+    background: var(--tone);
+    flex: none;
+    align-self: center;
+  }
+  .tag-pill[data-active="true"]::before { background: currentColor; }
   .tag-pill[data-active="true"] {
-    background: color-mix(in oklch, var(--tone) 88%, var(--background));
-    border-color: transparent;
+    background: var(--tone);
+    border-color: var(--tone);
     color: var(--background);
   }
   .tag-count {
-    font-size: 0.7rem;
+    font-size: 0.6875rem;
     font-variant-numeric: tabular-nums;
-    opacity: 0.65;
+    color: var(--muted-foreground);
+  }
+  .tag-pill[data-active="true"] .tag-count { color: inherit; opacity: 0.75; }
+
+  /* --- The index: a finding aid, not a chart widget ----------------------
+     The bar is set behind the word at low opacity, so the list still reads as
+     a list of subjects and the weight is felt rather than measured. */
+  .index-row {
+    position: relative;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.3rem 0 0.45rem;
+  }
+  /* The measure is a rule under the word, not a block behind it — a filled row
+     reads as a selected row, and nothing here is selected. */
+  .index-row::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: 0.1rem;
+    height: 2px;
+    width: var(--weight, 0%);
+    background: var(--tone, var(--tone-theme));
+    opacity: 0.55;
+    border-radius: 2px;
+    transition: opacity 0.15s;
+  }
+  .index-row:hover::after { opacity: 1; }
+  .index-row:hover .index-name { color: var(--foreground); }
+  .index-name { transition: color 0.15s; }
+  .index-row[data-tier="entity"] { --tone: var(--tone-entity); }
+  .index-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .index-row + .index-row { margin-top: 0.1rem; }
+  .index-count {
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted-foreground);
+    flex: none;
+  }
+
+  /* --- Surfaces ----------------------------------------------------------
+     A panel is for things that genuinely are objects — a draft, a media frame,
+     a search hit. Posts in the register are not objects, so they get no panel. */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-panel);
+  }
+  .card-surface { /* kept for pages still on the older vocabulary */
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-panel);
+  }
+  .glass {
+    background: color-mix(in oklch, var(--background) 86%, transparent);
+    backdrop-filter: saturate(150%) blur(12px);
+    -webkit-backdrop-filter: saturate(150%) blur(12px);
   }
 
   /* --- Small building blocks --------------------------------------------- */
-  .stat-tile {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: 0.85rem 1rem;
-  }
+  .stat-tile { padding: 0; }
   .stat-value {
-    font-size: 1.5rem;
-    font-weight: 640;
-    letter-spacing: -0.02em;
+    display: block;
+    font-size: 1.625rem;
+    font-weight: 600;
+    letter-spacing: -0.022em;
     font-variant-numeric: tabular-nums;
+    line-height: 1.15;
   }
   .stat-label {
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
+    display: block;
+    margin-top: 0.15rem;
+    font-size: 0.8125rem;
     color: var(--muted-foreground);
   }
   .meta-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.9rem;
     font-size: 0.78rem;
     color: var(--muted-foreground);
     font-variant-numeric: tabular-nums;
@@ -410,64 +538,60 @@
   .chip {
     display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
+    gap: 0.28rem;
     border-radius: 9999px;
-    padding: 0.15rem 0.5rem;
+    padding: 0.1rem 0.45rem;
     background: var(--surface-2);
     font-size: 0.72rem;
   }
-  .link-quiet {
-    color: var(--muted-foreground);
-    transition: color 0.15s;
-  }
+  .link-quiet { color: var(--muted-foreground); transition: color 0.15s; }
   .link-quiet:hover { color: var(--foreground); }
-  .divider-dot::before { content: "·"; margin-right: 0.75rem; opacity: 0.5; }
 
   .btn-primary {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 0.4rem;
-    border-radius: var(--radius-md);
+    border-radius: var(--r-control);
     background: var(--primary);
     color: var(--primary-foreground);
-    padding: 0.5rem 0.9rem;
+    padding: 0.5rem 0.95rem;
     font-size: 0.875rem;
-    font-weight: 520;
-    transition: filter 0.15s, transform 0.1s;
+    font-weight: 500;
+    transition: background 0.15s;
   }
-  .btn-primary:hover { filter: brightness(1.08); }
-  .btn-primary:active { transform: translateY(1px); }
-  .btn-primary:disabled { opacity: 0.5; pointer-events: none; }
+  .btn-primary:hover { background: color-mix(in oklch, var(--primary) 88%, var(--foreground)); }
+  .btn-primary:disabled { opacity: 0.45; pointer-events: none; }
 
   .btn-ghost {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 0.4rem;
-    border-radius: var(--radius-md);
+    border-radius: var(--r-control);
     border: 1px solid var(--border);
-    background: var(--surface);
-    padding: 0.45rem 0.85rem;
+    background: transparent;
+    padding: 0.45rem 0.9rem;
     font-size: 0.875rem;
     transition: background 0.15s, border-color 0.15s;
   }
   .btn-ghost:hover { background: var(--surface-2); border-color: var(--border-strong); }
-  .btn-ghost:disabled { opacity: 0.5; pointer-events: none; }
+  .btn-ghost:disabled { opacity: 0.45; pointer-events: none; }
 
   .input-field {
     width: 100%;
-    border-radius: var(--radius-md);
+    border-radius: var(--r-control);
     border: 1px solid var(--input);
     background: var(--surface);
     padding: 0.55rem 0.8rem;
     font-size: 0.9rem;
     transition: border-color 0.15s, box-shadow 0.15s;
   }
+  .input-field::placeholder { color: color-mix(in oklch, var(--muted-foreground) 80%, transparent); }
   .input-field:focus {
     outline: none;
     border-color: var(--ring);
-    box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 18%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 16%, transparent);
   }
 
   .nav-link {
@@ -478,15 +602,14 @@
     transition: color 0.15s;
   }
   .nav-link:hover { color: var(--foreground); }
-  .nav-link[data-active="true"] { color: var(--foreground); font-weight: 540; }
+  .nav-link[data-active="true"] { color: var(--foreground); }
   .nav-link[data-active="true"]::after {
     content: "";
     position: absolute;
     left: 0;
     right: 0;
-    bottom: -0.35rem;
-    height: 2px;
-    border-radius: 2px;
+    bottom: -0.3rem;
+    height: 1.5px;
     background: var(--primary);
   }
 }
@@ -494,8 +617,10 @@
 @layer utilities {
   .text-balance { text-wrap: balance; }
   .text-pretty { text-wrap: pretty; }
-  .animate-rise { animation: var(--animate-rise); }
-  .animate-fade { animation: var(--animate-fade); }
+  .tnum { font-variant-numeric: tabular-nums; }
+  /* Kept so existing markup keeps working; the page no longer animates itself
+     on load, so these resolve to nothing. */
+  .animate-rise, .animate-fade { animation: none; }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       animation-duration: 0.01ms !important;

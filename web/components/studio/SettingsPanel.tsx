@@ -79,7 +79,7 @@ export function SettingsPanel({ initial }: { initial: StudioSettings }) {
             {["tone", "formality", "language_mix", "emoji_usage"].map((key) =>
               voice[key] ? (
                 <div key={key} className="rounded-lg bg-surface-2 p-2.5">
-                  <dt className="text-[0.65rem] uppercase tracking-wider text-muted-foreground">
+                  <dt className="text-xs text-muted-foreground">
                     {key.replace(/_/g, " ")}
                   </dt>
                   <dd className="mt-0.5 text-xs">{String(voice[key])}</dd>

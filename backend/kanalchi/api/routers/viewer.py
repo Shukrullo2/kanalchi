@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from kanalchi.api.deps import get_db, require_tenant
-from kanalchi.api.serializers import attach_media_links, post_out
+from kanalchi.api.serializers import attach_media_links, attach_tags, post_out
 from kanalchi.core.models import Channel, Post, Tenant
 
 router = APIRouter(prefix="/api", tags=["viewer"])
@@ -22,11 +22,12 @@ async def _channel(db: AsyncSession, tenant: Tenant) -> Channel | None:
 @router.get("/tenant")
 async def tenant_info(tenant: Tenant = Depends(require_tenant), db: AsyncSession = Depends(get_db)) -> dict:
     channel = await _channel(db, tenant)
-    post_count = await db.scalar(
-        select(func.count())
-        .select_from(Post)
-        .where(Post.tenant_id == tenant.id, Post.is_deleted.is_(False), Post.is_album_root.is_(True))
-    )
+    counted = Post.tenant_id == tenant.id, Post.is_deleted.is_(False), Post.is_album_root.is_(True)
+    post_count, first_at, last_at = (
+        await db.execute(
+            select(func.count(Post.id), func.min(Post.date), func.max(Post.date)).where(*counted)
+        )
+    ).one()
     return {
         "id": tenant.id,
         "slug": tenant.slug,
@@ -41,6 +42,8 @@ async def tenant_info(tenant: Tenant = Depends(require_tenant), db: AsyncSession
         "locales": tenant.locales,
         "bot_username": tenant.bot_username,
         "post_count": post_count or 0,
+        "first_post_at": first_at,
+        "last_post_at": last_at,
         "theme": (tenant.settings or {}).get("theme", {}),
     }
 
@@ -75,7 +78,11 @@ async def list_posts(
     has_more = len(rows) > limit
     rows = rows[:limit]
     media_by, links_by = await attach_media_links(db, rows)
-    items = [post_out(p, channel, media_by.get(p.id, []), links_by.get(p.id, [])) for p in rows]
+    tags_by = await attach_tags(db, rows)
+    items = [
+        post_out(p, channel, media_by.get(p.id, []), links_by.get(p.id, []), tags_by.get(p.id, []))
+        for p in rows
+    ]
     next_cursor = f"{rows[-1].date.isoformat()}_{rows[-1].id}" if has_more and rows else None
     return {"items": items, "next_cursor": next_cursor}
 
@@ -112,7 +119,13 @@ async def top_posts(
         )
     ).all()
     media_by, links_by = await attach_media_links(db, rows)
-    return {"items": [post_out(p, channel, media_by.get(p.id, []), links_by.get(p.id, [])) for p in rows]}
+    tags_by = await attach_tags(db, rows)
+    return {
+        "items": [
+            post_out(p, channel, media_by.get(p.id, []), links_by.get(p.id, []), tags_by.get(p.id, []))
+            for p in rows
+        ]
+    }
 
 
 @router.get("/posts/{tg_message_id}")

@@ -69,20 +69,58 @@ export function monthLabel(month: string, locale = "en"): string {
   return `${months(locale)[m - 1]} ${String(y).slice(2)}`;
 }
 
-/** Deterministic avatar gradient from a channel name, used when there is no channel photo. */
-export function initialsGradient(seed: string): { initials: string; style: React.CSSProperties } {
+/** The month a post belongs to, for grouping the register into runs. */
+export function monthKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/**
+ * "sentabr 2026" — the marker that separates one run of entries from the next.
+ *
+ * Russian needs its own table here: the long month names above are genitive
+ * because they are written for "21 сентября 2026", and a month standing on its
+ * own takes the nominative.
+ */
+const RU_MONTHS_NOM = [
+  "январь", "февраль", "март", "апрель", "май", "июнь",
+  "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь",
+];
+
+export function monthTitle(iso: string, locale = "en"): string {
+  const d = new Date(iso);
+  const base = locale.split("-")[0];
+  const name = base === "ru" ? RU_MONTHS_NOM[d.getMonth()] : months(locale, true)[d.getMonth()];
+  return `${name} ${d.getFullYear()}`;
+}
+
+/** The span an archive covers, written as "sen 2024 — sen 2026". */
+export function dateSpan(first: string, last: string, locale = "en"): string {
+  const a = new Date(first);
+  const b = new Date(last);
+  const left = `${months(locale)[a.getMonth()]} ${a.getFullYear()}`;
+  const right = `${months(locale)[b.getMonth()]} ${b.getFullYear()}`;
+  return left === right ? left : `${left} — ${right}`;
+}
+
+/**
+ * A channel with no photo gets a flat tone from the palette rather than a generated
+ * gradient: two initials on one of four inks, picked deterministically from the name.
+ */
+export function initialsTone(seed: string): { initials: string; style: React.CSSProperties } {
   let hash = 0;
-  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) % 360;
+  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) % 4;
+  const tones = [
+    "oklch(0.505 0.178 268)",
+    "oklch(0.545 0.163 27)",
+    "oklch(0.44 0.09 230)",
+    "oklch(0.42 0.07 285)",
+  ];
   const initials = seed
     .split(/\s+/)
     .slice(0, 2)
     .map((w) => w[0])
     .join("")
     .toUpperCase();
-  return {
-    initials: initials || "K",
-    style: {
-      backgroundImage: `linear-gradient(135deg, oklch(0.62 0.16 ${hash}), oklch(0.52 0.19 ${(hash + 55) % 360}))`,
-    },
-  };
+  return { initials: initials || "K", style: { background: tones[hash] } };
 }

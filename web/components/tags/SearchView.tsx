@@ -6,6 +6,7 @@ import { CloseIcon, SearchIcon } from "@/components/Icons";
 import { PostCard } from "@/components/post/PostCard";
 import { tagLabel } from "@/lib/labels";
 import type { SearchResult } from "@/lib/types";
+import { toneVar } from "@/lib/dimensions";
 
 const SORTS = ["relevance", "newest", "oldest", "views", "reactions"] as const;
 
@@ -99,11 +100,15 @@ export function SearchView({
       ) : null}
 
       <div className="grid gap-5 lg:grid-cols-[1fr_190px]">
-        <div className={`space-y-3.5 transition-opacity ${pending ? "opacity-40" : ""}`}>
+        <div className={`transition-opacity ${pending ? "opacity-40" : ""}`}>
           {initial.items.length === 0 ? (
-            <div className="card-surface p-12 text-center text-sm text-muted-foreground">{labels.nothing}</div>
+            <div className="py-16 text-center text-sm text-muted-foreground">{labels.nothing}</div>
           ) : (
-            initial.items.map((p) => <PostCard key={p.id} post={p} locale={locale} />)
+            <div className="register border-t">
+              {initial.items.map((p) => (
+                <PostCard key={p.id} post={p} locale={locale} />
+              ))}
+            </div>
           )}
         </div>
 
@@ -111,10 +116,10 @@ export function SearchView({
           <aside className="order-first space-y-4 lg:order-last">
             {Object.entries(initial.facets ?? {}).map(([dimension, tags]) => (
               <div key={dimension}>
-                <div className="mb-1.5 flex items-center gap-1.5 text-[0.65rem] uppercase tracking-wider text-muted-foreground">
+                <div className="mb-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
                   <span
                     className="inline-block h-1.5 w-1.5 rounded-full"
-                    style={{ background: `var(--dim-${dimension}, var(--dim-default))` }}
+                    style={{ background: toneVar(dimension) }}
                     aria-hidden
                   />
                   {dimension}

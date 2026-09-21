@@ -10,7 +10,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from kanalchi.api.deps import get_db, require_tenant
-from kanalchi.api.serializers import attach_media_links, post_out
+from kanalchi.api.serializers import attach_media_links, attach_tags, post_out
 from kanalchi.core.models import Channel, Dimension, Post, PostTag, Tag, Tenant
 from kanalchi.search import hybrid
 
@@ -44,7 +44,11 @@ async def _posts_by_ids(db: AsyncSession, tenant: Tenant, ids: list[int]) -> lis
     by_id = {p.id: p for p in rows}
     ordered = [by_id[i] for i in ids if i in by_id]
     media_by, links_by = await attach_media_links(db, ordered)
-    return [post_out(p, channel, media_by.get(p.id, []), links_by.get(p.id, [])) for p in ordered]
+    tags_by = await attach_tags(db, ordered)
+    return [
+        post_out(p, channel, media_by.get(p.id, []), links_by.get(p.id, []), tags_by.get(p.id, []))
+        for p in ordered
+    ]
 
 
 @router.get("/dimensions")
@@ -141,12 +145,13 @@ async def tag_detail(
         await db.execute(
             text(
                 """
-                SELECT t.slug, t.canonical_name, t.labels, count(*) AS cnt
+                SELECT t.slug, t.canonical_name, t.labels, d.key AS dimension, count(*) AS cnt
                 FROM post_tags a
                 JOIN post_tags b ON b.post_id = a.post_id AND b.tag_id <> a.tag_id
                 JOIN tags t ON t.id = b.tag_id AND t.status = 'active'
+                LEFT JOIN dimensions d ON d.id = t.dimension_id
                 WHERE a.tag_id = :tag_id
-                GROUP BY t.slug, t.canonical_name, t.labels
+                GROUP BY t.slug, t.canonical_name, t.labels, d.key
                 ORDER BY cnt DESC LIMIT 12
                 """
             ),
@@ -172,7 +177,10 @@ async def tag_detail(
         "first_post_at": span[0] if span else None,
         "last_post_at": span[1] if span else None,
         "histogram": [{"month": b, "count": c} for b, c in histogram],
-        "co_tags": [{"slug": s, "name": n, "labels": lb or {}, "count": c} for s, n, lb, c in co_tags],
+        "co_tags": [
+            {"slug": s, "name": n, "labels": lb or {}, "dimension": dim, "count": c}
+            for s, n, lb, dim, c in co_tags
+        ],
         "children": [tag_out(c, dimension_key) for c in children],
         "parent": tag_out(parent, dimension_key) if parent else None,
     }

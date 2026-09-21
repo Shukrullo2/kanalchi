@@ -5,6 +5,7 @@ import { getLocale } from "next-intl/server";
 import { ArrowLeftIcon, ArrowRightIcon } from "@/components/Icons";
 import { PostCard } from "@/components/post/PostCard";
 import { TagChip } from "@/components/tags/TagChip";
+import { byTier, tierOf } from "@/lib/dimensions";
 import { apiFetchOrNull } from "@/lib/api";
 import { postDate } from "@/lib/format";
 import type { PostOut, TagOut, TenantPublic } from "@/lib/types";
@@ -58,47 +59,67 @@ export default async function PostPage({ params }: Props) {
     mainEntityOfPage: `https://${tenant?.domain ?? ""}/post/${post.id}`,
   };
 
+  const subjects = tags ? byTier(tags).filter((t) => tierOf(t.dimension) !== "meta") : [];
+  const filing = tags ? tags.filter((t) => tierOf(t.dimension) === "meta") : [];
+
   return (
-    <div className="space-y-5">
+    <div>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
       <PostCard post={post} locale={locale} full />
 
-      {tags && tags.length > 0 ? (
-        <div className="flex flex-wrap gap-1.5">
-          {tags.map((tag) => (
-            <TagChip key={tag.slug} tag={tag} locale={locale} />
-          ))}
-        </div>
+      {subjects.length > 0 ? (
+        <section className="mt-8 border-t pt-4">
+          <h2 className="mb-2.5 text-sm text-muted-foreground">Indexed under</h2>
+          <div className="flex flex-wrap gap-1.5">
+            {subjects.map((tag) => (
+              <TagChip key={tag.slug} tag={tag} locale={locale} />
+            ))}
+          </div>
+          {filing.length > 0 ? (
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
+              {filing.map((tag) => (
+                <TagChip key={tag.slug} tag={tag} locale={locale} />
+              ))}
+            </div>
+          ) : null}
+        </section>
       ) : null}
 
       {related && related.items.length > 0 ? (
-        <section className="card-surface p-4 sm:p-5">
-          <h2 className="mb-3 text-sm font-medium">Related posts</h2>
-          <ul className="space-y-2.5">
+        <section className="mt-8 border-t pt-4">
+          <h2 className="mb-2.5 text-sm text-muted-foreground">Close to this in the archive</h2>
+          <ul className="space-y-0.5">
             {related.items.map((r) => (
-              <li key={r.id} className="flex items-baseline justify-between gap-3 text-sm">
-                <Link href={`/post/${r.id}`} className="min-w-0 flex-1 truncate hover:text-primary">
-                  {r.title ?? plain(r.html, r.text).slice(0, 90)}
+              <li key={r.id}>
+                <Link
+                  href={`/post/${r.id}`}
+                  className="flex items-baseline justify-between gap-4 rounded py-1.5 text-sm hover:text-primary"
+                >
+                  <span className="min-w-0 flex-1 truncate">
+                    {r.title ?? plain(r.html, r.text).slice(0, 90)}
+                  </span>
+                  <span className="tnum shrink-0 text-xs text-muted-foreground" suppressHydrationWarning>
+                    {postDate(r.date, locale)}
+                  </span>
                 </Link>
-                <span className="shrink-0 text-xs text-muted-foreground">{postDate(r.date, locale)}</span>
               </li>
             ))}
           </ul>
         </section>
       ) : null}
 
-      <nav className="flex justify-between gap-3 text-sm">
+      <nav className="mt-10 flex justify-between gap-3 border-t pt-5 text-sm">
         {post.prev_id ? (
-          <Link href={`/post/${post.prev_id}`} className="btn-ghost">
-            <ArrowLeftIcon size={14} /> older
+          <Link href={`/post/${post.prev_id}`} className="link-quiet flex items-center gap-1.5">
+            <ArrowLeftIcon size={14} /> Earlier post
           </Link>
         ) : (
           <span />
         )}
         {post.next_id ? (
-          <Link href={`/post/${post.next_id}`} className="btn-ghost">
-            newer <ArrowRightIcon size={14} />
+          <Link href={`/post/${post.next_id}`} className="link-quiet flex items-center gap-1.5">
+            Later post <ArrowRightIcon size={14} />
           </Link>
         ) : (
           <span />

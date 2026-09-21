@@ -31,10 +31,10 @@ export default async function TenantLayout({ children }: { children: React.React
         studio={isMember ? { href: "/studio", label: nav("studio") } : null}
       />
 
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 sm:py-8">{children}</main>
+      <main className="shell flex-1 py-7 sm:py-10">{children}</main>
 
-      <footer className="mt-8 border-t">
-        <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-6 text-xs text-muted-foreground">
+      <footer className="mt-12 border-t">
+        <div className="shell flex flex-wrap items-center gap-x-5 gap-y-2 py-6 text-xs text-muted-foreground">
           {tenant.username ? (
             <a href={`https://t.me/${tenant.username}`} target="_blank" rel="noreferrer" className="link-quiet">
               t.me/{tenant.username}

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { call, patch, post } from "@/lib/client";
 import { tagLabel } from "@/lib/labels";
 import type { PendingTag, TagOut } from "@/lib/types";
+import { toneVar } from "@/lib/dimensions";
 
 export function TagManager({
   pending,
@@ -67,7 +68,7 @@ export function TagManager({
               <li key={c.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
                 <span
                   className="h-2 w-2 shrink-0 rounded-full"
-                  style={{ background: `var(--dim-${c.dimension}, var(--dim-default))` }}
+                  style={{ background: toneVar(c.dimension) }}
                   aria-hidden
                 />
                 <span className="min-w-0 flex-1">
@@ -109,7 +110,7 @@ export function TagManager({
             <li key={t.slug} className="flex flex-wrap items-center gap-3 px-4 py-2.5">
               <span
                 className="h-2 w-2 shrink-0 rounded-full"
-                style={{ background: `var(--dim-${t.dimension}, var(--dim-default))` }}
+                style={{ background: toneVar(t.dimension) }}
                 aria-hidden
               />
               <span className="min-w-0 flex-1 truncate text-sm">{tagLabel(t, locale)}</span>

@@ -5,6 +5,7 @@ import { ArrowLeftIcon } from "@/components/Icons";
 import { apiFetch } from "@/lib/api";
 import { dimensionLabel, tagLabel } from "@/lib/labels";
 import type { DimensionOut, TagOut } from "@/lib/types";
+import { toneVar } from "@/lib/dimensions";
 
 type Props = { params: Promise<{ dimension: string }> };
 
@@ -24,7 +25,7 @@ export default async function DimensionPage({ params }: Props) {
       <header className="flex items-baseline gap-2">
         <span
           className="inline-block h-2.5 w-2.5 rounded-full"
-          style={{ background: `var(--dim-${dim.key}, var(--dim-default))` }}
+          style={{ background: toneVar(dim.key) }}
           aria-hidden
         />
         <h1 className="text-xl font-semibold tracking-tight">{dimensionLabel(dim, locale)}</h1>
@@ -42,7 +43,7 @@ export default async function DimensionPage({ params }: Props) {
                   className="block h-full rounded-full"
                   style={{
                     width: `${(tag.post_count / max) * 100}%`,
-                    background: `var(--dim-${dim.key}, var(--dim-default))`,
+                    background: toneVar(dim.key),
                   }}
                 />
               </span>

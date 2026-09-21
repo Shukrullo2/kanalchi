@@ -27,7 +27,7 @@ export default async function StoryPage({ params }: Props) {
         <p className="meta-row">
           <span>{story.post_count} posts</span>
           {story.first_at && story.last_at ? (
-            <span className="divider-dot">
+            <span>
               {postDate(story.first_at, locale)} – {postDate(story.last_at, locale)}
             </span>
           ) : null}
