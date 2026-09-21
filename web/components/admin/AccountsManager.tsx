@@ -1,17 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { StatusDot } from "@/components/admin/StatusDot";
 import { call, del, post } from "@/lib/client";
 import type { TgAccount } from "@/lib/types";
-
-const BADGE: Record<string, string> = {
-  active: "bg-green-100 text-green-800",
-  pending_code: "bg-amber-100 text-amber-800",
-  pending_password: "bg-amber-100 text-amber-800",
-  flood_wait: "bg-orange-100 text-orange-800",
-  dead: "bg-red-100 text-red-800",
-  disabled: "bg-neutral-200 text-neutral-700",
-};
 
 export function AccountsManager({ initial }: { initial: TgAccount[] }) {
   const [accounts, setAccounts] = useState(initial);
@@ -55,13 +47,13 @@ export function AccountsManager({ initial }: { initial: TgAccount[] }) {
         <label className="text-sm">
           <span className="mb-1 block text-muted-foreground">Phone (international format)</span>
           <input
-            className="w-56 rounded border bg-transparent px-2 py-1"
+            className="input-field w-56"
             placeholder="+998901234567"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
           />
         </label>
-        <button disabled={busy || phone.length < 6} className="rounded bg-foreground px-3 py-1.5 text-sm text-background disabled:opacity-50">
+        <button disabled={busy || phone.length < 6} className="btn-primary">
           Send code
         </button>
         <p className="w-full text-xs text-muted-foreground">
@@ -69,27 +61,28 @@ export function AccountsManager({ initial }: { initial: TgAccount[] }) {
         </p>
       </form>
 
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="rounded-md border px-3 py-2 text-sm" style={{ color: "var(--destructive)", borderColor: "var(--destructive)" }}>{error}</p> : null}
 
       <div className="space-y-3">
         {accounts.map((a) => (
-          <div key={a.id} className="rounded-lg border p-3 text-sm">
+          <div key={a.id} className="card-surface p-3.5 text-sm">
             <div className="flex flex-wrap items-center gap-3">
               <span className="font-medium">{a.phone}</span>
-              <span className={`rounded px-1.5 py-0.5 text-xs ${BADGE[a.status] ?? "bg-neutral-100"}`}>{a.status}</span>
+              <StatusDot status={a.status} />
+              <span className="chip">{a.status}</span>
               {a.display_name ? <span className="text-muted-foreground">{a.display_name}</span> : null}
               {a.last_seen_at ? (
                 <span className="text-xs text-muted-foreground">seen {new Date(a.last_seen_at).toLocaleString()}</span>
               ) : null}
               <button
                 onClick={() => void run(() => del(`/api/admin/accounts/${a.id}`))}
-                className="ml-auto text-xs text-muted-foreground hover:text-red-600"
+                className="link-quiet ml-auto text-xs"
               >
                 disable
               </button>
             </div>
             {typeof a.health?.last_error === "string" && a.health.last_error ? (
-              <p className="mt-1 text-xs text-red-600">{a.health.last_error as string}</p>
+              <p className="mt-1 text-xs" style={{ color: "var(--destructive)" }}>{a.health.last_error as string}</p>
             ) : null}
             {a.status === "pending_code" || a.status === "pending_password" ? (
               <form
@@ -104,13 +97,13 @@ export function AccountsManager({ initial }: { initial: TgAccount[] }) {
                 }}
               >
                 <input
-                  className="w-40 rounded border bg-transparent px-2 py-1"
+                  className="input-field w-40"
                   type={a.status === "pending_password" ? "password" : "text"}
                   placeholder={a.status === "pending_code" ? "12345" : "2FA password"}
                   value={secret[a.id] ?? ""}
                   onChange={(e) => setSecret((s) => ({ ...s, [a.id]: e.target.value }))}
                 />
-                <button className="rounded bg-foreground px-3 py-1 text-xs text-background">submit</button>
+                <button className="btn-primary py-1 text-xs">submit</button>
                 {a.status === "pending_code" ? (
                   <button
                     type="button"

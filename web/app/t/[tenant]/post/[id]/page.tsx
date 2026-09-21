@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale } from "next-intl/server";
+import { ArrowLeftIcon, ArrowRightIcon } from "@/components/Icons";
 import { PostCard } from "@/components/post/PostCard";
 import { TagChip } from "@/components/tags/TagChip";
 import { apiFetchOrNull } from "@/lib/api";
+import { postDate } from "@/lib/format";
 import type { PostOut, TagOut, TenantPublic } from "@/lib/types";
 
 type Props = { params: Promise<{ id: string }> };
@@ -57,36 +59,50 @@ export default async function PostPage({ params }: Props) {
   };
 
   return (
-    <div>
+    <div className="space-y-5">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      <PostCard post={post} full />
+
+      <PostCard post={post} locale={locale} full />
+
       {tags && tags.length > 0 ? (
-        <div className="mt-4 flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1.5">
           {tags.map((tag) => (
             <TagChip key={tag.slug} tag={tag} locale={locale} />
           ))}
         </div>
       ) : null}
+
       {related && related.items.length > 0 ? (
-        <section className="mt-8">
-          <h2 className="mb-2 text-sm font-medium text-muted-foreground">Related</h2>
-          <ul className="space-y-2 text-sm">
+        <section className="card-surface p-4 sm:p-5">
+          <h2 className="mb-3 text-sm font-medium">Related posts</h2>
+          <ul className="space-y-2.5">
             {related.items.map((r) => (
-              <li key={r.id}>
-                <Link href={`/post/${r.id}`} className="hover:underline">
-                  {r.title ?? r.text.slice(0, 90)}
+              <li key={r.id} className="flex items-baseline justify-between gap-3 text-sm">
+                <Link href={`/post/${r.id}`} className="min-w-0 flex-1 truncate hover:text-primary">
+                  {r.title ?? plain(r.html, r.text).slice(0, 90)}
                 </Link>
-                <span className="ml-2 text-xs text-muted-foreground">
-                  {new Date(r.date).toLocaleDateString()}
-                </span>
+                <span className="shrink-0 text-xs text-muted-foreground">{postDate(r.date, locale)}</span>
               </li>
             ))}
           </ul>
         </section>
       ) : null}
-      <nav className="mt-6 flex justify-between text-sm">
-        {post.prev_id ? <Link href={`/post/${post.prev_id}`}>← older</Link> : <span />}
-        {post.next_id ? <Link href={`/post/${post.next_id}`}>newer →</Link> : <span />}
+
+      <nav className="flex justify-between gap-3 text-sm">
+        {post.prev_id ? (
+          <Link href={`/post/${post.prev_id}`} className="btn-ghost">
+            <ArrowLeftIcon size={14} /> older
+          </Link>
+        ) : (
+          <span />
+        )}
+        {post.next_id ? (
+          <Link href={`/post/${post.next_id}`} className="btn-ghost">
+            newer <ArrowRightIcon size={14} />
+          </Link>
+        ) : (
+          <span />
+        )}
       </nav>
     </div>
   );

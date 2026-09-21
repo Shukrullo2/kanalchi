@@ -1,10 +1,12 @@
 "use client";
 
+import { useLocale } from "next-intl";
 import { useState } from "react";
 import type { PostOut, PostPage } from "@/lib/types";
 import { PostCard } from "./PostCard";
 
 export function Timeline({ initial, loadMoreLabel }: { initial: PostPage; loadMoreLabel: string }) {
+  const locale = useLocale();
   const [items, setItems] = useState<PostOut[]>(initial.items);
   const [cursor, setCursor] = useState<string | null>(initial.next_cursor);
   const [busy, setBusy] = useState(false);
@@ -23,13 +25,15 @@ export function Timeline({ initial, loadMoreLabel }: { initial: PostPage; loadMo
   }
 
   return (
-    <div>
-      {items.map((p) => (
-        <PostCard key={p.id} post={p} />
+    <div className="space-y-3.5">
+      {items.map((p, i) => (
+        <div key={p.id} className="animate-rise" style={{ animationDelay: `${Math.min(i, 8) * 25}ms` }}>
+          <PostCard post={p} locale={locale} />
+        </div>
       ))}
       {cursor ? (
-        <button onClick={more} disabled={busy} className="mt-6 w-full rounded-lg border py-2 text-sm hover:bg-muted">
-          {busy ? "…" : loadMoreLabel}
+        <button onClick={more} disabled={busy} className="btn-ghost w-full justify-center">
+          {busy ? <span className="animate-pulse">…</span> : loadMoreLabel}
         </button>
       ) : null}
     </div>

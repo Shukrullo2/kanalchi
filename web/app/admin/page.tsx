@@ -1,62 +1,75 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
+import { ChartIcon, SparkIcon } from "@/components/Icons";
+import { StatusDot } from "@/components/admin/StatusDot";
 import { apiFetch } from "@/lib/api";
+import { compactNumber } from "@/lib/format";
 import type { AdminOverview } from "@/lib/types";
 
 export default async function AdminHome() {
-  const [data, t] = await Promise.all([apiFetch<AdminOverview>("/api/admin/overview", { admin: true }), getTranslations("admin")]);
+  const [data, t] = await Promise.all([
+    apiFetch<AdminOverview>("/api/admin/overview", { admin: true }),
+    getTranslations("admin"),
+  ]);
+
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Stat label={t("tenants")} value={data.tenants.length} />
-        <Stat label={t("accounts")} value={data.accounts} />
-        <Stat label={t("runningJobs")} value={data.running_jobs} />
-        <Stat label={t("spendToday")} value={`$${data.spend_today_usd.toFixed(2)}`} />
-      </div>
-      <section>
-        <h2 className="mb-2 font-medium">{t("tenants")}</h2>
+      <dl className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        {[
+          [t("tenants"), compactNumber(data.tenants.length)],
+          [t("accounts"), compactNumber(data.accounts)],
+          [t("runningJobs"), compactNumber(data.running_jobs)],
+          [t("spendToday"), `$${data.spend_today_usd.toFixed(2)}`],
+        ].map(([label, value]) => (
+          <div key={label} className="stat-tile">
+            <dt className="stat-label">{label}</dt>
+            <dd className="stat-value">{value}</dd>
+          </div>
+        ))}
+      </dl>
+
+      <section className="card-surface overflow-hidden">
+        <header className="flex items-center justify-between gap-3 border-b px-4 py-3">
+          <h2 className="flex items-center gap-2 text-sm font-medium">
+            <ChartIcon size={15} className="text-muted-foreground" />
+            {t("tenants")}
+          </h2>
+          <Link href="/onboard" className="link-quiet flex items-center gap-1 text-xs">
+            <SparkIcon size={12} />
+            {t("onboard")}
+          </Link>
+        </header>
+
         {data.tenants.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            <Link href="/onboard" className="underline">
+          <div className="p-10 text-center text-sm text-muted-foreground">
+            No channels yet.{" "}
+            <Link href="/onboard" className="text-primary underline">
               {t("onboard")}
             </Link>
-          </p>
+          </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="text-left text-muted-foreground">
-              <tr>
-                <th className="py-1">Domain</th>
-                <th>Title</th>
-                <th>Status</th>
-                <th>Bot</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.tenants.map((x) => (
-                <tr key={x.id} className="border-t">
-                  <td className="py-2">
-                    <Link href={`/tenants/${x.id}`} className="underline">
-                      {x.domain}
-                    </Link>
-                  </td>
-                  <td>{x.title}</td>
-                  <td>{x.status}</td>
-                  <td>{x.bot_username ? `@${x.bot_username}` : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <ul className="divide-y">
+            {data.tenants.map((x) => (
+              <li key={x.id}>
+                <Link
+                  href={`/tenants/${x.id}`}
+                  className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-2"
+                >
+                  <StatusDot status={x.status} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{x.domain}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{x.title || "—"}</span>
+                  </span>
+                  <span className="hidden text-xs text-muted-foreground sm:block">
+                    {x.bot_username ? `@${x.bot_username}` : "no bot"}
+                  </span>
+                  <span className="chip">{x.status}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
-    </div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-lg border p-4">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="text-2xl font-semibold">{value}</div>
     </div>
   );
 }

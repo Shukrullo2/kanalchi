@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale } from "next-intl/server";
+import { ArrowLeftIcon } from "@/components/Icons";
 import { apiFetch } from "@/lib/api";
 import { dimensionLabel, tagLabel } from "@/lib/labels";
 import type { DimensionOut, TagOut } from "@/lib/types";
@@ -16,25 +17,45 @@ export default async function DimensionPage({ params }: Props) {
   ]);
   const dim = dimensions.find((d) => d.key === dimension);
   if (!dim) notFound();
+  const max = Math.max(1, ...tags.map((t) => t.post_count));
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-lg font-medium">{dimensionLabel(dim, locale)}</h1>
-        {dim.description ? <p className="text-sm text-muted-foreground">{dim.description}</p> : null}
-      </div>
-      <ul className="divide-y">
+    <div className="space-y-5">
+      <header className="flex items-baseline gap-2">
+        <span
+          className="inline-block h-2.5 w-2.5 rounded-full"
+          style={{ background: `var(--dim-${dim.key}, var(--dim-default))` }}
+          aria-hidden
+        />
+        <h1 className="text-xl font-semibold tracking-tight">{dimensionLabel(dim, locale)}</h1>
+        <span className="text-sm text-muted-foreground">{tags.length}</span>
+      </header>
+      {dim.description ? <p className="text-sm text-muted-foreground">{dim.description}</p> : null}
+
+      <ul className="card-surface divide-y overflow-hidden">
         {tags.map((tag) => (
-          <li key={tag.slug} className="flex items-baseline justify-between gap-4 py-2">
-            <Link href={`/tag/${tag.slug}`} className="hover:underline">
-              {tagLabel(tag, locale)}
+          <li key={tag.slug}>
+            <Link href={`/tag/${tag.slug}`} className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-surface-2">
+              <span className="min-w-0 flex-1 truncate">{tagLabel(tag, locale)}</span>
+              <span className="hidden h-1 w-24 overflow-hidden rounded-full bg-border sm:block">
+                <span
+                  className="block h-full rounded-full"
+                  style={{
+                    width: `${(tag.post_count / max) * 100}%`,
+                    background: `var(--dim-${dim.key}, var(--dim-default))`,
+                  }}
+                />
+              </span>
+              <span className="w-10 shrink-0 text-right text-sm tabular-nums text-muted-foreground">
+                {tag.post_count}
+              </span>
             </Link>
-            <span className="text-sm text-muted-foreground">{tag.post_count}</span>
           </li>
         ))}
       </ul>
-      <Link href="/tags" className="inline-block text-sm underline">
-        ← all tags
+
+      <Link href="/tags" className="link-quiet inline-flex items-center gap-1.5 text-sm">
+        <ArrowLeftIcon size={14} /> all tags
       </Link>
     </div>
   );

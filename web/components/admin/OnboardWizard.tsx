@@ -8,9 +8,16 @@ type BotResult = { bot_username: string; webhook_set: boolean; webhook_error: st
 
 function Step({ n, title, done, children }: { n: number; title: string; done: boolean; children: React.ReactNode }) {
   return (
-    <section className="rounded-lg border p-4">
-      <h2 className="mb-2 flex items-center gap-2 font-medium">
-        <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs ${done ? "bg-green-600 text-white" : "bg-muted"}`}>
+    <section className="card-surface p-4 sm:p-5">
+      <h2 className="mb-3 flex items-center gap-2.5 font-medium">
+        <span
+          className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-semibold transition-colors"
+          style={
+            done
+              ? { background: "var(--success)", color: "var(--background)" }
+              : { background: "var(--surface-2)", color: "var(--muted-foreground)" }
+          }
+        >
           {done ? "✓" : n}
         </span>
         {title}
@@ -57,7 +64,7 @@ export function OnboardWizard({ accounts }: { accounts: TgAccount[] }) {
 
   return (
     <div className="max-w-2xl space-y-4">
-      {error ? <p className="rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">{error}</p> : null}
+      {error ? <p className="rounded-md border p-2.5 text-sm" style={{ color: "var(--destructive)", borderColor: "var(--destructive)" }}>{error}</p> : null}
 
       <Step n={1} title="Domain" done={!!tenant}>
         {tenant ? (
@@ -79,7 +86,7 @@ export function OnboardWizard({ accounts }: { accounts: TgAccount[] }) {
             <label className="text-sm">
               <span className="mb-1 block text-muted-foreground">Blog domain</span>
               <input
-                className="w-56 rounded border bg-transparent px-2 py-1"
+                className="input-field w-56"
                 placeholder="blog.example.uz"
                 value={form.domain}
                 onChange={(e) => setForm({ ...form, domain: e.target.value })}
@@ -88,12 +95,12 @@ export function OnboardWizard({ accounts }: { accounts: TgAccount[] }) {
             <label className="text-sm">
               <span className="mb-1 block text-muted-foreground">Title (optional)</span>
               <input
-                className="w-48 rounded border bg-transparent px-2 py-1"
+                className="input-field w-48"
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
               />
             </label>
-            <button disabled={busy || form.domain.length < 3} className="rounded bg-foreground px-3 py-1.5 text-sm text-background disabled:opacity-50">
+            <button disabled={busy || form.domain.length < 3} className="btn-primary">
               Create
             </button>
           </form>
@@ -124,7 +131,7 @@ export function OnboardWizard({ accounts }: { accounts: TgAccount[] }) {
               <label className="text-sm">
                 <span className="mb-1 block text-muted-foreground">Channel link or @username</span>
                 <input
-                  className="w-64 rounded border bg-transparent px-2 py-1"
+                  className="input-field w-64"
                   placeholder="https://t.me/mychannel"
                   value={form.link}
                   onChange={(e) => setForm({ ...form, link: e.target.value })}
@@ -133,7 +140,7 @@ export function OnboardWizard({ accounts }: { accounts: TgAccount[] }) {
               <label className="text-sm">
                 <span className="mb-1 block text-muted-foreground">Telegram account</span>
                 <select
-                  className="rounded border bg-transparent px-2 py-1"
+                  className="input-field w-auto"
                   value={form.accountId}
                   onChange={(e) => setForm({ ...form, accountId: Number(e.target.value) })}
                 >
@@ -146,7 +153,7 @@ export function OnboardWizard({ accounts }: { accounts: TgAccount[] }) {
               </label>
               <button
                 disabled={busy || !tenant || activeAccounts.length === 0 || form.link.length < 3}
-                className="rounded bg-foreground px-3 py-1.5 text-sm text-background disabled:opacity-50"
+                className="btn-primary"
               >
                 Resolve
               </button>
@@ -156,7 +163,7 @@ export function OnboardWizard({ accounts }: { accounts: TgAccount[] }) {
               join private channel via invite link
             </label>
             {activeAccounts.length === 0 ? (
-              <p className="text-xs text-amber-700">Sign in a Telegram account first (Telegram accounts tab).</p>
+              <p className="text-xs" style={{ color: "var(--warning)" }}>Sign in a Telegram account first (Telegram accounts tab).</p>
             ) : null}
           </form>
         )}
@@ -166,7 +173,7 @@ export function OnboardWizard({ accounts }: { accounts: TgAccount[] }) {
         {steps?.bot.done ? (
           <p className="text-sm text-muted-foreground">
             @{steps.bot.username} · used for publishing and the login widget
-            {botResult?.webhook_error ? <span className="block text-amber-700">webhook: {botResult.webhook_error}</span> : null}
+            {botResult?.webhook_error ? <span className="block" style={{ color: "var(--warning)" }}>webhook: {botResult.webhook_error}</span> : null}
             {botResult ? <span className="block text-xs">BotFather: {botResult.setdomain_hint}</span> : null}
           </p>
         ) : (
@@ -184,14 +191,14 @@ export function OnboardWizard({ accounts }: { accounts: TgAccount[] }) {
               <label className="text-sm">
                 <span className="mb-1 block text-muted-foreground">Bot token from @BotFather</span>
                 <input
-                  className="w-72 rounded border bg-transparent px-2 py-1"
+                  className="input-field w-72"
                   type="password"
                   placeholder="123456:ABC-DEF…"
                   value={form.token}
                   onChange={(e) => setForm({ ...form, token: e.target.value })}
                 />
               </label>
-              <button disabled={busy || !steps?.channel.done} className="rounded bg-foreground px-3 py-1.5 text-sm text-background disabled:opacity-50">
+              <button disabled={busy || !steps?.channel.done} className="btn-primary">
                 Connect
               </button>
             </div>
@@ -209,7 +216,7 @@ export function OnboardWizard({ accounts }: { accounts: TgAccount[] }) {
           <button
             onClick={() => void run(() => post(`/api/admin/tenants/${tenant!.id}/verify-domain`))}
             disabled={busy || !tenant}
-            className="rounded border px-3 py-1 text-xs disabled:opacity-50"
+            className="btn-ghost py-1 text-xs"
           >
             Check DNS
           </button>
@@ -222,7 +229,7 @@ export function OnboardWizard({ accounts }: { accounts: TgAccount[] }) {
           <button
             onClick={() => void run(() => post(`/api/admin/tenants/${tenant!.id}/start`))}
             disabled={busy || !steps?.channel.done}
-            className="rounded bg-foreground px-3 py-1.5 text-background disabled:opacity-50"
+            className="btn-primary"
           >
             Start import
           </button>
@@ -234,9 +241,9 @@ export function OnboardWizard({ accounts }: { accounts: TgAccount[] }) {
           ) : null}
         </div>
         {steps?.backfill.total ? (
-          <div className="mt-2 h-1.5 w-full overflow-hidden rounded bg-muted">
+          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-border">
             <div
-              className="h-full bg-foreground transition-all"
+              className="h-full rounded-full bg-primary transition-all"
               style={{ width: `${Math.min(100, Math.round(((steps.backfill.checkpoint || 0) / steps.backfill.total) * 100))}%` }}
             />
           </div>

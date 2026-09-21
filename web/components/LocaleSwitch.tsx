@@ -8,15 +8,18 @@ export function LocaleSwitch() {
   const locale = useLocale();
   const router = useRouter();
   return (
-    <div className="flex gap-1 text-xs">
+    <div className="flex items-center rounded-full bg-surface-2 p-0.5 text-[0.68rem] font-medium">
       {LOCALES.map((l) => (
         <button
           key={l}
-          className={l === locale ? "font-semibold" : "text-muted-foreground hover:text-foreground"}
           onClick={() => {
             document.cookie = `locale=${l}; path=/; max-age=31536000; samesite=lax`;
             router.refresh();
           }}
+          className={`rounded-full px-1.5 py-0.5 transition-colors ${
+            l === locale ? "bg-surface text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"
+          }`}
+          aria-current={l === locale}
         >
           {l.toUpperCase()}
         </button>

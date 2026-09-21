@@ -64,21 +64,21 @@ export function TelegramLogin({ botUsername, dev }: { botUsername: string | null
     <div className="flex flex-col items-center gap-3">
       {botUsername ? <div ref={holder} /> : null}
       {dev ? (
-        <form onSubmit={devLogin} className="flex items-center gap-2 rounded-md border border-dashed p-3 text-sm">
+        <form onSubmit={devLogin} className="flex items-center gap-2 rounded-lg border border-dashed p-3 text-sm">
           <span className="text-muted-foreground">dev login · tg id</span>
           <input
-            className="w-24 rounded border bg-transparent px-2 py-1"
+            className="input-field w-24"
             value={devId}
             onChange={(e) => setDevId(e.target.value)}
             inputMode="numeric"
           />
-          <button className="rounded bg-foreground px-3 py-1 text-background" type="submit">
+          <button className="btn-primary py-1.5" type="submit">
             Sign in
           </button>
         </form>
       ) : null}
       {!botUsername && !dev ? <p className="text-sm text-muted-foreground">Login bot is not configured for this host.</p> : null}
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="text-sm" style={{ color: "var(--destructive)" }}>{error}</p> : null}
     </div>
   );
 }

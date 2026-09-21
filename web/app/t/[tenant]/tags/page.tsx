@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
+import { ArrowRightIcon } from "@/components/Icons";
+import { TagChip } from "@/components/tags/TagChip";
 import { apiFetch } from "@/lib/api";
-import { dimensionLabel, tagLabel } from "@/lib/labels";
+import { dimensionLabel } from "@/lib/labels";
 import type { DimensionOut, TagOut } from "@/lib/types";
 
 export const metadata = { title: "Tags" };
@@ -16,44 +18,46 @@ export default async function TagsPage() {
   const byDimension = new Map<string, TagOut[]>();
   for (const tag of tags) {
     if (!tag.dimension) continue;
-    const bucket = byDimension.get(tag.dimension) ?? [];
-    bucket.push(tag);
-    byDimension.set(tag.dimension, bucket);
+    byDimension.set(tag.dimension, [...(byDimension.get(tag.dimension) ?? []), tag]);
   }
 
   if (dimensions.length === 0) {
-    return <p className="text-muted-foreground">{t("notIndexedYet")}</p>;
+    return (
+      <div className="card-surface p-12 text-center text-sm text-muted-foreground">{t("notIndexedYet")}</div>
+    );
   }
 
   return (
-    <div className="space-y-8">
-      {dimensions.map((dim) => {
+    <div className="space-y-5">
+      {dimensions.map((dim, i) => {
         const dimTags = (byDimension.get(dim.key) ?? []).slice(0, 24);
         if (dimTags.length === 0) return null;
         return (
-          <section key={dim.key}>
-            <h2 className="mb-2 flex items-baseline gap-2">
-              <Link href={`/tags/${dim.key}`} className="font-medium hover:underline">
+          <section
+            key={dim.key}
+            className="card-surface animate-rise p-4 sm:p-5"
+            style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}
+          >
+            <div className="mb-3 flex items-baseline justify-between gap-3">
+              <h2 className="flex items-baseline gap-2 font-medium">
+                <span
+                  className="inline-block h-2 w-2 shrink-0 rounded-full"
+                  style={{ background: `var(--dim-${dim.key}, var(--dim-default))` }}
+                  aria-hidden
+                />
                 {dimensionLabel(dim, locale)}
-              </Link>
-              <span className="text-xs text-muted-foreground">{dim.tag_count}</span>
-            </h2>
-            <div className="flex flex-wrap gap-1.5">
-              {dimTags.map((tag) => (
-                <Link
-                  key={tag.slug}
-                  href={`/tag/${tag.slug}`}
-                  className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-sm hover:bg-muted"
-                >
-                  {tagLabel(tag, locale)}
-                  <span className="text-xs text-muted-foreground">{tag.post_count}</span>
-                </Link>
-              ))}
+                <span className="text-xs font-normal text-muted-foreground">{dim.tag_count}</span>
+              </h2>
               {dim.tag_count > dimTags.length ? (
-                <Link href={`/tags/${dim.key}`} className="px-2 py-0.5 text-sm text-muted-foreground hover:underline">
-                  +{dim.tag_count - dimTags.length}
+                <Link href={`/tags/${dim.key}`} className="link-quiet flex items-center gap-1 text-xs">
+                  all <ArrowRightIcon size={12} />
                 </Link>
               ) : null}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {dimTags.map((tag) => (
+                <TagChip key={tag.slug} tag={tag} locale={locale} showCount />
+              ))}
             </div>
           </section>
         );

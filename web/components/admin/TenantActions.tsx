@@ -30,28 +30,28 @@ export function TenantActions({ tenant }: { tenant: AdminTenant }) {
       <button
         disabled={busy}
         onClick={() => void run("import", () => post(`/api/admin/tenants/${tenant.id}/start`))}
-        className="rounded border px-3 py-1 disabled:opacity-50"
+        className="btn-ghost"
       >
         Resume import
       </button>
       <button
         disabled={busy}
         onClick={() => void run("resync", () => post(`/api/admin/tenants/${tenant.id}/resync?days=30`))}
-        className="rounded border px-3 py-1 disabled:opacity-50"
+        className="btn-ghost"
       >
         Resync 30d
       </button>
       <button
         disabled={busy}
         onClick={() => void run("dns", () => post(`/api/admin/tenants/${tenant.id}/verify-domain`))}
-        className="rounded border px-3 py-1 disabled:opacity-50"
+        className="btn-ghost"
       >
         Check DNS
       </button>
       <button
         disabled={busy}
         onClick={() => void run(paused ? "resume" : "pause", () => patch(`/api/admin/tenants/${tenant.id}`, { status: paused ? "active" : "paused" }))}
-        className="rounded border px-3 py-1 disabled:opacity-50"
+        className="btn-ghost"
       >
         {paused ? "Resume channel" : "Pause channel"}
       </button>

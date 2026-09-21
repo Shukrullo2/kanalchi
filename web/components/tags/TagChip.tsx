@@ -1,15 +1,28 @@
 import Link from "next/link";
-import type { TagOut } from "@/lib/types";
 import { tagLabel } from "@/lib/labels";
+import type { TagOut } from "@/lib/types";
 
-export function TagChip({ tag, locale, showCount = false }: { tag: TagOut; locale: string; showCount?: boolean }) {
+/** Tag pill tinted by its dimension, so the kind of tag is readable without labels. */
+export function TagChip({
+  tag,
+  locale,
+  showCount = false,
+  active = false,
+}: {
+  tag: Pick<TagOut, "slug" | "name" | "labels" | "dimension" | "post_count">;
+  locale: string;
+  showCount?: boolean;
+  active?: boolean;
+}) {
   return (
     <Link
       href={`/tag/${tag.slug}`}
-      className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs hover:bg-muted"
+      className="tag-pill"
+      data-active={active}
+      style={{ "--tone": `var(--dim-${tag.dimension ?? "default"}, var(--dim-default))` } as React.CSSProperties}
     >
       {tagLabel(tag, locale)}
-      {showCount ? <span className="text-muted-foreground">{tag.post_count}</span> : null}
+      {showCount ? <span className="tag-count">{tag.post_count}</span> : null}
     </Link>
   );
 }

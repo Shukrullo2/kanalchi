@@ -6,7 +6,8 @@ export type TenantPublic = {
   title: string;
   about?: string | null;
   username?: string | null;
-  photo_key?: string | null;
+  photo_url?: string | null;
+  participants_count?: number | null;
   primary_lang: string;
   locales: string[];
   bot_username: string | null;

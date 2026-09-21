@@ -6,7 +6,8 @@
     "chat": "Ask",
     "top": "Top",
     "studio": "Studio",
-    "admin": "Admin"
+    "admin": "Admin",
+    "stats": "Stats"
   },
   "common": {
     "loading": "Loading…",

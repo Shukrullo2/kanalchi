@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArrowLeftIcon, ExternalIcon } from "@/components/Icons";
+import { StatusDot } from "@/components/admin/StatusDot";
 import { TenantActions } from "@/components/admin/TenantActions";
 import { apiFetchOrNull } from "@/lib/api";
 import type { AdminTenant, Checklist, JobRunOut } from "@/lib/types";
@@ -15,74 +17,88 @@ export default async function TenantDetail({ params }: Props) {
   ]);
   if (!tenant) notFound();
 
+  const backfill = checklist?.steps.backfill;
+  const done = backfill?.total ? Math.min(100, Math.round((backfill.checkpoint / backfill.total) * 100)) : null;
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-baseline gap-3">
-        <h1 className="text-lg font-semibold">{tenant.domain}</h1>
-        <span className="rounded bg-muted px-2 py-0.5 text-xs">{tenant.status}</span>
-        <a href={`https://${tenant.domain}`} target="_blank" rel="noreferrer" className="text-sm underline">
-          open blog ↗
-        </a>
+      <div>
+        <Link href="/tenants" className="link-quiet mb-2 inline-flex items-center gap-1.5 text-sm">
+          <ArrowLeftIcon size={14} /> channels
+        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <StatusDot status={tenant.status} />
+          <h1 className="text-xl font-semibold tracking-tight">{tenant.domain}</h1>
+          <span className="chip">{tenant.status}</span>
+          <a
+            href={`https://${tenant.domain}`}
+            target="_blank"
+            rel="noreferrer"
+            className="link-quiet ml-auto flex items-center gap-1 text-sm"
+          >
+            open blog <ExternalIcon size={12} />
+          </a>
+        </div>
       </div>
 
-      <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-        <Field label="Channel" value={tenant.channel ? (tenant.channel.username ? `@${tenant.channel.username}` : tenant.channel.title) : "—"} />
-        <Field label="Subscribers" value={tenant.channel?.participants_count ?? "—"} />
-        <Field label="Bot" value={tenant.bot_username ? `@${tenant.bot_username}` : "—"} />
-        <Field label="DNS verified" value={tenant.domain_verified_at ? new Date(tenant.domain_verified_at).toLocaleDateString() : "no"} />
-        <Field
-          label="Import"
-          value={checklist ? `${checklist.steps.backfill.status ?? "—"} ${checklist.steps.backfill.checkpoint}/${checklist.steps.backfill.total ?? "?"}` : "—"}
-        />
-        <Field label="Chat budget" value={`$${tenant.daily_chat_budget_usd}/day`} />
-        <Field label="Studio budget" value={`$${tenant.daily_studio_budget_usd}/day`} />
-        <Field label="Languages" value={tenant.locales.join(", ")} />
+      <dl className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        {[
+          ["Channel", tenant.channel ? (tenant.channel.username ? `@${tenant.channel.username}` : tenant.channel.title) : "—"],
+          ["Subscribers", tenant.channel?.participants_count?.toLocaleString() ?? "—"],
+          ["Bot", tenant.bot_username ? `@${tenant.bot_username}` : "—"],
+          ["DNS", tenant.domain_verified_at ? "verified" : "unverified"],
+          ["Chat budget", `$${tenant.daily_chat_budget_usd}/day`],
+          ["Studio budget", `$${tenant.daily_studio_budget_usd}/day`],
+          ["Languages", tenant.locales.join(", ")],
+          ["Created", new Date(tenant.created_at).toISOString().slice(0, 10)],
+        ].map(([label, value]) => (
+          <div key={label} className="stat-tile">
+            <dt className="stat-label">{label}</dt>
+            <dd className="truncate text-sm font-medium">{value}</dd>
+          </div>
+        ))}
       </dl>
+
+      {done !== null ? (
+        <section className="card-surface p-4">
+          <div className="mb-2 flex items-baseline justify-between text-sm">
+            <span className="font-medium">History import</span>
+            <span className="text-muted-foreground tabular-nums">
+              {backfill?.checkpoint} / {backfill?.total} · {done}%
+            </span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-border">
+            <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${done}%` }} />
+          </div>
+        </section>
+      ) : null}
 
       <TenantActions tenant={tenant} />
 
-      <section>
-        <h2 className="mb-2 font-medium">Recent jobs</h2>
+      <section className="card-surface overflow-hidden">
+        <h2 className="border-b px-4 py-3 text-sm font-medium">Recent jobs</h2>
         {jobs && jobs.length > 0 ? (
-          <table className="w-full text-sm">
-            <thead className="text-left text-muted-foreground">
-              <tr>
-                <th className="py-1">Type</th>
-                <th>Status</th>
-                <th>Progress</th>
-                <th>Started</th>
-              </tr>
-            </thead>
-            <tbody>
-              {jobs.map((j) => (
-                <tr key={j.id} className="border-t">
-                  <td className="py-1.5">{j.type}</td>
-                  <td>{j.status}</td>
-                  <td className="text-muted-foreground">
-                    {j.error ?? (j.progress?.done != null ? `${j.progress.done}/${j.progress.total ?? "?"}` : j.progress?.message ?? "—")}
-                  </td>
-                  <td className="text-muted-foreground">{j.started_at ? new Date(j.started_at).toLocaleString() : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <ul className="divide-y text-sm">
+            {jobs.map((j) => (
+              <li key={j.id} className="flex items-center gap-3 px-4 py-2.5">
+                <StatusDot status={j.status} />
+                <span className="w-24 shrink-0 font-medium">{j.type}</span>
+                <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                  {j.error ??
+                    (j.progress?.done != null
+                      ? `${j.progress.done}/${j.progress.total ?? "?"}`
+                      : (j.progress?.message ?? "—"))}
+                </span>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {j.started_at ? new Date(j.started_at).toISOString().slice(5, 16).replace("T", " ") : "—"}
+                </span>
+              </li>
+            ))}
+          </ul>
         ) : (
-          <p className="text-sm text-muted-foreground">No jobs yet.</p>
+          <p className="p-8 text-center text-sm text-muted-foreground">No jobs yet.</p>
         )}
       </section>
-
-      <Link href="/tenants" className="inline-block text-sm underline">
-        ← all channels
-      </Link>
-    </div>
-  );
-}
-
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="rounded border p-2">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd>{value}</dd>
     </div>
   );
 }
