@@ -40,12 +40,12 @@ export async function streamTurn(sessionId: string, text: string, handlers: Stre
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
 
-      let split = buffer.indexOf("\n\n");
-      while (split !== -1) {
-        const frame = buffer.slice(0, split);
-        buffer = buffer.slice(split + 2);
+      for (;;) {
+        const boundary = FRAME_END.exec(buffer);
+        if (!boundary) break;
+        const frame = buffer.slice(0, boundary.index);
+        buffer = buffer.slice(boundary.index + boundary[0].length);
         dispatch(frame, handlers);
-        split = buffer.indexOf("\n\n");
       }
     }
   } finally {
@@ -53,10 +53,17 @@ export async function streamTurn(sessionId: string, text: string, handlers: Stre
   }
 }
 
+/**
+ * A blank line ends a frame, and SSE allows CRLF, LF or bare CR for it — sse-starlette on the
+ * server side writes CRLF. Matching only "\n\n" here meant no frame boundary was ever found and
+ * the whole turn was silently dropped, so the separator stays spelled out in full.
+ */
+const FRAME_END = /\r\n\r\n|\n\n|\r\r/;
+
 function dispatch(frame: string, h: StreamHandlers) {
   let event = "message";
   const dataLines: string[] = [];
-  for (const line of frame.split("\n")) {
+  for (const line of frame.split(/\r\n|\n|\r/)) {
     if (line.startsWith("event:")) event = line.slice(6).trim();
     else if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
   }
