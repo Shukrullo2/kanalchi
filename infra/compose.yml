@@ -1,0 +1,165 @@
+name: kanalchi
+
+x-backend: &backend
+  build:
+    context: ../backend
+  env_file: .env
+  environment:
+    DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    REDIS_URL: redis://redis:6379/0
+    S3_ENDPOINT: http://minio:9000
+    S3_ACCESS_KEY: ${MINIO_ROOT_USER}
+    S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: { max-size: "20m", max-file: "5" }
+
+x-backend-deps: &backend-deps
+  migrate:
+    condition: service_completed_successfully
+  redis:
+    condition: service_healthy
+  minio:
+    condition: service_healthy
+
+services:
+  caddy:
+    image: caddy:2
+    ports: ["80:80", "443:443", "443:443/udp"]
+    env_file: .env
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [web, api]
+    restart: unless-stopped
+    deploy: { resources: { limits: { memory: 128M } } }
+
+  web:
+    build:
+      context: ../web
+    environment:
+      API_INTERNAL_URL: http://api:8000
+      ADMIN_HOST: ${ADMIN_HOST}
+      REVALIDATE_SECRET: ${SESSION_SECRET}
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
+    deploy: { resources: { limits: { memory: 512M } } }
+
+  api:
+    <<: *backend
+    command: uvicorn kanalchi.api.main:app --host 0.0.0.0 --port 8000 --workers 2 --proxy-headers --forwarded-allow-ips '*'
+    depends_on: *backend-deps
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/internal/health',timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    deploy: { resources: { limits: { memory: 768M } } }
+
+  worker-telegram:
+    <<: *backend
+    command: kanalchi worker telegram
+    depends_on: *backend-deps
+    volumes:
+      - media_tmp:/var/tmp/media
+    deploy: { replicas: 1, resources: { limits: { memory: 1200M } } }
+
+  worker-index:
+    <<: *backend
+    command: kanalchi worker index
+    depends_on: *backend-deps
+    deploy: { resources: { limits: { memory: 768M } } }
+
+  worker-publish:
+    <<: *backend
+    command: kanalchi worker publish
+    depends_on: *backend-deps
+    deploy: { resources: { limits: { memory: 256M } } }
+
+  migrate:
+    <<: *backend
+    command: kanalchi migrate
+    restart: "no"
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    env_file: .env
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    deploy: { resources: { limits: { memory: 2G } } }
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 200mb --maxmemory-policy volatile-ttl --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    deploy: { resources: { limits: { memory: 256M } } }
+
+  minio:
+    image: quay.io/minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    deploy: { resources: { limits: { memory: 512M } } }
+
+  minio-init:
+    image: quay.io/minio/mc
+    depends_on:
+      minio: { condition: service_healthy }
+    entrypoint: ["/bin/sh", "/init.sh"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - ./scripts/minio-init.sh:/init.sh:ro
+    restart: "no"
+
+  backup:
+    build:
+      context: ./backup
+    env_file: .env
+    environment:
+      PGHOST: postgres
+      S3_ENDPOINT: http://minio:9000
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio: { condition: service_healthy }
+    restart: unless-stopped
+    deploy: { resources: { limits: { memory: 128M } } }
+
+volumes:
+  caddy_data:
+  caddy_config:
+  pg_data:
+  redis_data:
+  minio_data:
+  media_tmp:

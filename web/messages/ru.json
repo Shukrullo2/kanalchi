@@ -1,0 +1,7 @@
+{
+  "nav": { "home": "Посты", "tags": "Теги", "search": "Поиск", "chat": "Спросить", "top": "Топ", "studio": "Студия", "admin": "Админ" },
+  "common": { "loading": "Загрузка…", "signIn": "Войти через Telegram", "signOut": "Выйти", "posts": "{count, plural, =0 {нет постов} one {# пост} few {# поста} other {# постов}}", "comingSoon": "Скоро", "unknownHost": "Этот домен не привязан ни к одному каналу." },
+  "home": { "emptyTitle": "Пока пусто", "emptyBody": "Посты появятся, как только история канала будет импортирована." },
+  "studio": { "title": "Студия", "needLogin": "Войдите через Telegram-аккаунт администратора канала.", "notAdmin": "В студию могут войти только администраторы канала." },
+  "admin": { "title": "Админ", "overview": "Обзор", "tenants": "Каналы", "accounts": "Telegram-аккаунты", "jobs": "Задачи", "costs": "Расходы", "onboard": "Подключить канал", "needLogin": "Войдите через разрешённый Telegram-аккаунт.", "spendToday": "Расход сегодня", "runningJobs": "Активные задачи" }
+}

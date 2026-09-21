@@ -1,0 +1,7 @@
+{
+  "nav": { "home": "Posts", "tags": "Tags", "search": "Search", "chat": "Ask", "top": "Top", "studio": "Studio", "admin": "Admin" },
+  "common": { "loading": "Loading…", "signIn": "Sign in with Telegram", "signOut": "Sign out", "posts": "{count, plural, =0 {no posts} one {# post} other {# posts}}", "comingSoon": "Coming soon", "unknownHost": "This domain is not connected to any channel." },
+  "home": { "emptyTitle": "Nothing here yet", "emptyBody": "Posts will appear as soon as the channel history is imported." },
+  "studio": { "title": "Studio", "needLogin": "Sign in with the Telegram account that administers this channel.", "notAdmin": "Only channel admins can enter the studio." },
+  "admin": { "title": "Admin", "overview": "Overview", "tenants": "Channels", "accounts": "Telegram accounts", "jobs": "Jobs", "costs": "Costs", "onboard": "Onboard a channel", "needLogin": "Sign in with an allow-listed Telegram account.", "spendToday": "Spend today", "runningJobs": "Running jobs" }
+}

@@ -1,0 +1,36 @@
+# Local development: api/web run on the host (:8001 / :3001), infra runs in Docker.
+# HTTPS on :8443 (internal CA) and plain HTTP on :8080 for tools that dislike self-signed certs.
+{
+	local_certs
+	auto_https disable_redirects
+}
+
+(app) {
+	encode zstd gzip
+	handle /api/* {
+		reverse_proxy host.docker.internal:8001 {
+			flush_interval -1
+		}
+	}
+	handle /tg/* {
+		reverse_proxy host.docker.internal:8001
+	}
+	handle_path /media/* {
+		rewrite * /media{path}
+		reverse_proxy minio:9000 {
+			header_up Host minio:9000
+		}
+	}
+	handle {
+		reverse_proxy host.docker.internal:3001
+	}
+}
+
+*.localhost, localhost {
+	tls internal
+	import app
+}
+
+http://*.localhost, http://localhost {
+	import app
+}

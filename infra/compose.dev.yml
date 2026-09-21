@@ -1,0 +1,68 @@
+# Local development: only infrastructure runs in Docker; run api/web on the host:
+#   docker compose -f infra/compose.dev.yml up -d
+#   make api   (uvicorn --reload on :8001)      make web   (next dev on :3001)
+# Then open https://admin.localhost:8443 and https://demo.localhost:8443 (Caddy internal CA).
+# Ports are offset (8080/8443/5433/6380/9002/9003) so they never collide with other local projects.
+name: kanalchi-dev
+
+services:
+  caddy:
+    image: caddy:2
+    ports: ["8080:80", "8443:443"]
+    volumes:
+      - ./Caddyfile.dev:/etc/caddy/Caddyfile:ro
+      - caddy_dev_data:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: kanalchi
+      POSTGRES_PASSWORD: kanalchi
+      POSTGRES_DB: kanalchi
+    ports: ["5433:5432"]
+    volumes:
+      - pg_dev_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kanalchi -d kanalchi"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 200mb --maxmemory-policy volatile-ttl
+    ports: ["6380:6379"]
+
+  minio:
+    image: quay.io/minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: kanalchi
+      MINIO_ROOT_PASSWORD: kanalchi123
+    ports: ["9002:9000", "9003:9001"]
+    volumes:
+      - minio_dev_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio-init:
+    image: quay.io/minio/mc
+    depends_on:
+      minio: { condition: service_healthy }
+    entrypoint: ["/bin/sh", "/init.sh"]
+    environment:
+      MINIO_ROOT_USER: kanalchi
+      MINIO_ROOT_PASSWORD: kanalchi123
+    volumes:
+      - ./scripts/minio-init.sh:/init.sh:ro
+
+volumes:
+  caddy_dev_data:
+  pg_dev_data:
+  minio_dev_data:

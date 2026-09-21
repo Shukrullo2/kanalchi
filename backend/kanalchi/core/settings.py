@@ -1,0 +1,93 @@
+"""Single source of configuration. Every process (api, workers, cli) reads the same env."""
+
+from __future__ import annotations
+
+from functools import lru_cache
+
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=(".env", "../infra/.env"), env_file_encoding="utf-8", extra="ignore"
+    )
+
+    # --- environment ---
+    env: str = Field(default="dev", alias="APP_ENV")  # dev | prod
+    log_level: str = "INFO"
+    sentry_dsn: str | None = None
+
+    # --- domains ---
+    admin_host: str = "admin.localhost"
+    public_ip: str | None = None
+    public_scheme: str = "https"
+    public_port: int | None = None  # dev: 8443 (Caddy); prod: None
+
+    # --- secrets ---
+    app_master_key: str | None = None
+    app_master_key_prev: str | None = None
+    session_secret: str = "dev-only-change-me"
+    session_ttl_days: int = 30
+
+    # --- telegram ---
+    tg_api_id: int | None = None
+    tg_api_hash: str | None = None
+    platform_bot_token: str | None = None
+    admin_tg_ids: list[int] = Field(default_factory=list)
+
+    # --- ai ---
+    anthropic_api_key: str | None = None
+    voyage_api_key: str | None = None
+    chat_model: str = "claude-opus-5"
+    extract_model: str = "claude-sonnet-5"
+    embed_model: str = "voyage-4"
+    embed_dim: int = 1024
+    enable_refusal_fallbacks: bool = True
+
+    # --- budgets / limits ---
+    default_daily_chat_budget_usd: float = 5.0
+    default_daily_studio_budget_usd: float = 20.0
+    platform_daily_llm_cap_usd: float = 200.0
+    media_max_bytes: int = 200 * 1024 * 1024
+    viewer_chat_per_ip_10min: int = 10
+    viewer_chat_per_visitor_day: int = 40
+    viewer_chat_per_tenant_day: int = 300
+
+    # --- datastores ---
+    database_url: str = "postgresql+psycopg://kanalchi:kanalchi@localhost:5433/kanalchi"
+    redis_url: str = "redis://localhost:6380/0"
+    s3_endpoint: str = "http://localhost:9002"
+    s3_access_key: str = "kanalchi"
+    s3_secret_key: str = "kanalchi123"
+    s3_region: str = "us-east-1"
+    s3_bucket_media: str = "media"
+    s3_bucket_uploads: str = "uploads"
+    media_tmp_dir: str = "/var/tmp/media"
+
+    @field_validator("admin_tg_ids", mode="before")
+    @classmethod
+    def _split_ids(cls, v: object) -> list[int]:
+        if v is None or v == "":
+            return []
+        if isinstance(v, str):
+            return [int(x) for x in v.replace(";", ",").split(",") if x.strip()]
+        return list(v)  # type: ignore[arg-type]
+
+    @property
+    def is_dev(self) -> bool:
+        return self.env != "prod"
+
+    @property
+    def libpq_dsn(self) -> str:
+        """DATABASE_URL without the SQLAlchemy driver suffix, for procrastinate / raw psycopg."""
+        return self.database_url.replace("postgresql+psycopg://", "postgresql://", 1)
+
+    def public_url(self, host: str, path: str = "/") -> str:
+        port = f":{self.public_port}" if self.public_port else ""
+        return f"{self.public_scheme}://{host}{port}{path}"
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()  # type: ignore[call-arg]

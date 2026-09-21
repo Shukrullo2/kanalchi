@@ -1,0 +1,7 @@
+{
+  "nav": { "home": "Postlar", "tags": "Teglar", "search": "Qidiruv", "chat": "So‘rash", "top": "Top", "studio": "Studiya", "admin": "Admin" },
+  "common": { "loading": "Yuklanmoqda…", "signIn": "Telegram orqali kirish", "signOut": "Chiqish", "posts": "{count, plural, =0 {postlar yo‘q} one {# ta post} other {# ta post}}", "comingSoon": "Tez orada", "unknownHost": "Bu domen hech qaysi kanalga ulanmagan." },
+  "home": { "emptyTitle": "Hozircha bo‘sh", "emptyBody": "Kanal tarixi import qilinishi bilan postlar shu yerda paydo bo‘ladi." },
+  "studio": { "title": "Studiya", "needLogin": "Kanal administratori bo‘lgan Telegram akkaunt orqali kiring.", "notAdmin": "Studiyaga faqat kanal administratorlari kira oladi." },
+  "admin": { "title": "Admin", "overview": "Umumiy", "tenants": "Kanallar", "accounts": "Telegram akkauntlar", "jobs": "Vazifalar", "costs": "Xarajatlar", "onboard": "Kanal ulash", "needLogin": "Ruxsat berilgan Telegram akkaunt orqali kiring.", "spendToday": "Bugungi xarajat", "runningJobs": "Bajarilayotgan vazifalar" }
+}
