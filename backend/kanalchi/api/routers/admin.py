@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import secrets
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -10,7 +11,17 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from kanalchi.api.deps import enforce_same_origin, get_db, require_admin
-from kanalchi.core.models import Channel, JobRun, PlatformAdmin, TelegramAccount, Tenant, UsageLedger
+from kanalchi.core.jobs import create_job_run
+from kanalchi.core.models import (
+    Channel,
+    JobRun,
+    PlatformAdmin,
+    TaxonomyVersion,
+    TelegramAccount,
+    Tenant,
+    UsageLedger,
+)
+from kanalchi.core.settings import get_settings
 from kanalchi.text.slug import slugify
 
 router = APIRouter(
@@ -201,3 +212,156 @@ async def remove_admin(tg_user_id: int, db: AsyncSession = Depends(get_db)) -> d
     if row:
         await db.delete(row)
     return {"ok": True}
+
+
+# --------------------------------------------------------------------- costs
+@router.get("/costs")
+async def costs(days: int = 30, db: AsyncSession = Depends(get_db)) -> dict:
+    """Spend from the ledger, which is written from measured `usage`, never from estimates."""
+    since = date.today() - timedelta(days=max(1, min(days, 365)))
+
+    by_day = (
+        await db.execute(
+            select(
+                UsageLedger.day,
+                func.sum(UsageLedger.cost_usd),
+                func.sum(UsageLedger.input_tokens + UsageLedger.cache_read_tokens),
+                func.sum(UsageLedger.output_tokens),
+            )
+            .where(UsageLedger.day >= since)
+            .group_by(UsageLedger.day)
+            .order_by(UsageLedger.day)
+        )
+    ).all()
+
+    by_purpose = (
+        await db.execute(
+            select(UsageLedger.purpose, func.sum(UsageLedger.cost_usd), func.sum(UsageLedger.requests))
+            .where(UsageLedger.day >= since)
+            .group_by(UsageLedger.purpose)
+            .order_by(func.sum(UsageLedger.cost_usd).desc())
+        )
+    ).all()
+
+    by_model = (
+        await db.execute(
+            select(UsageLedger.model, func.sum(UsageLedger.cost_usd), func.sum(UsageLedger.requests))
+            .where(UsageLedger.day >= since)
+            .group_by(UsageLedger.model)
+            .order_by(func.sum(UsageLedger.cost_usd).desc())
+        )
+    ).all()
+
+    by_tenant = (
+        await db.execute(
+            select(Tenant.id, Tenant.domain, func.sum(UsageLedger.cost_usd))
+            .join(UsageLedger, UsageLedger.tenant_id == Tenant.id)
+            .where(UsageLedger.day >= since)
+            .group_by(Tenant.id, Tenant.domain)
+            .order_by(func.sum(UsageLedger.cost_usd).desc())
+            .limit(20)
+        )
+    ).all()
+
+    cache_rows = (
+        await db.execute(
+            select(
+                func.sum(UsageLedger.cache_read_tokens),
+                func.sum(UsageLedger.input_tokens),
+            ).where(UsageLedger.day >= since)
+        )
+    ).first()
+    cache_read = int(cache_rows[0] or 0) if cache_rows else 0
+    fresh_input = int(cache_rows[1] or 0) if cache_rows else 0
+    total_input = cache_read + fresh_input
+
+    return {
+        "days": days,
+        "total_usd": float(sum(float(r[1] or 0) for r in by_day)),
+        "by_day": [
+            {
+                "day": d.isoformat(),
+                "usd": float(usd or 0),
+                "input_tokens": int(inp or 0),
+                "output_tokens": int(out or 0),
+            }
+            for d, usd, inp, out in by_day
+        ],
+        "by_purpose": [
+            {"purpose": p, "usd": float(u or 0), "requests": int(r or 0)} for p, u, r in by_purpose
+        ],
+        "by_model": [{"model": m, "usd": float(u or 0), "requests": int(r or 0)} for m, u, r in by_model],
+        "by_tenant": [{"id": i, "domain": d, "usd": float(u or 0)} for i, d, u in by_tenant],
+        # A high cache-read share is the single best sign the prompts are built correctly.
+        "cache_hit_rate": round(cache_read / total_input, 3) if total_input else None,
+        "platform_daily_cap_usd": get_settings().platform_daily_llm_cap_usd,
+    }
+
+
+# --------------------------------------------------------------------- tenant operations
+@router.post("/tenants/{tenant_id}/reindex")
+async def reindex(tenant_id: int, db: AsyncSession = Depends(get_db)) -> dict:
+    """Re-run extraction for everything that has no result yet, then rebuild the taxonomy."""
+    from kanalchi.jobs import index_jobs
+
+    tenant = await db.get(Tenant, tenant_id)
+    if tenant is None:
+        raise HTTPException(404, "tenant not found")
+    job_run_id = await create_job_run(tenant_id, "extract", {"trigger": "admin"})
+    await index_jobs.index_backlog.defer_async(tenant_id=tenant_id, job_run_id=job_run_id)
+    return {"job_run_id": job_run_id}
+
+
+@router.get("/tenants/{tenant_id}/extract-estimate")
+async def extract_estimate(tenant_id: int, db: AsyncSession = Depends(get_db)) -> dict:
+    """What the next extraction batch will cost, measured on a sample rather than guessed."""
+    from kanalchi.ai.extraction import estimate_cost
+
+    tenant = await db.get(Tenant, tenant_id)
+    if tenant is None:
+        raise HTTPException(404, "tenant not found")
+    try:
+        return await estimate_cost(tenant_id)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(503, f"cannot estimate right now: {type(exc).__name__}") from exc
+
+
+@router.get("/tenants/{tenant_id}/taxonomy")
+async def taxonomy_versions(tenant_id: int, db: AsyncSession = Depends(get_db)) -> list[dict]:
+    rows = (
+        await db.scalars(
+            select(TaxonomyVersion)
+            .where(TaxonomyVersion.tenant_id == tenant_id)
+            .order_by(TaxonomyVersion.version_no.desc())
+            .limit(10)
+        )
+    ).all()
+    return [
+        {
+            "id": v.id,
+            "version_no": v.version_no,
+            "status": v.status,
+            "stats": v.candidate_stats,
+            "diff": {k: (len(x) if isinstance(x, list) else x) for k, x in (v.diff or {}).items()},
+            "cost_usd": float(v.cost_usd or 0),
+            "built_at": v.built_at,
+            "applied_at": v.applied_at,
+        }
+        for v in rows
+    ]
+
+
+@router.post("/tenants/{tenant_id}/taxonomy/{version_id}/apply")
+async def apply_taxonomy_version(tenant_id: int, version_id: int, db: AsyncSession = Depends(get_db)) -> dict:
+    from kanalchi.jobs import index_jobs
+
+    version = await db.get(TaxonomyVersion, version_id)
+    if version is None or version.tenant_id != tenant_id:
+        raise HTTPException(404, "taxonomy version not found")
+    if version.status == "applied":
+        raise HTTPException(409, "this version is already applied")
+    job_run_id = await create_job_run(tenant_id, "taxonomy", {"version_id": version_id})
+    await index_jobs.apply_taxonomy.defer_async(
+        tenant_id=tenant_id, version_id=version_id, job_run_id=job_run_id
+    )
+    return {"job_run_id": job_run_id}

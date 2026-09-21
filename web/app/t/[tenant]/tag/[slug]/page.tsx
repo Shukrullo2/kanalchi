@@ -8,7 +8,7 @@ import { Histogram } from "@/components/tags/Histogram";
 import { TagChip } from "@/components/tags/TagChip";
 import { apiFetch, apiFetchOrNull } from "@/lib/api";
 import { tagLabel } from "@/lib/labels";
-import type { SearchResult, TagDetail, TenantPublic } from "@/lib/types";
+import type { EntitySummaryOut, SearchResult, TagDetail, TenantPublic } from "@/lib/types";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -31,9 +31,10 @@ export default async function TagPage({ params }: Props) {
   if (!tag) notFound();
   if (tag.redirect_to) redirect(`/tag/${tag.redirect_to}`);
 
-  const results = await apiFetch<SearchResult>(
-    `/api/search?tags=${encodeURIComponent(slug)}&sort=newest&limit=20&with_facets=false`,
-  );
+  const [results, summary] = await Promise.all([
+    apiFetch<SearchResult>(`/api/search?tags=${encodeURIComponent(slug)}&sort=newest&limit=20&with_facets=false`),
+    apiFetchOrNull<EntitySummaryOut>(`/api/tags/${encodeURIComponent(slug)}/summary`),
+  ]);
   const tone = `var(--dim-${tag.dimension ?? "default"}, var(--dim-default))`;
   const years =
     tag.first_post_at && tag.last_post_at
@@ -105,6 +106,26 @@ export default async function TagPage({ params }: Props) {
           </div>
         ) : null}
       </header>
+
+      {summary?.available ? (
+        <section className="card-surface p-4 sm:p-5">
+          <h2 className="mb-1.5 text-xs uppercase tracking-wider text-muted-foreground">
+            What this channel has said
+          </h2>
+          <p className="text-pretty text-sm leading-relaxed">
+            {summary.summary[locale] ?? summary.summary.en}
+          </p>
+          {summary.citations.length > 0 ? (
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
+              {summary.citations.slice(0, 8).map((id) => (
+                <Link key={id} href={`/post/${id}`} className="chip hover:bg-border">
+                  #{id}
+                </Link>
+              ))}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       <div className="space-y-3.5">
         {results.items.map((p, i) => (

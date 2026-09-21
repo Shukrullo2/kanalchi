@@ -321,3 +321,61 @@ async def stats(tenant: Tenant = Depends(require_tenant), db: AsyncSession = Dep
         "by_month": [{"month": b, "posts": p, "mean_views": v} for b, p, v in by_month],
         "top_tags": [tag_out(t, key) for t, key in top_tags],
     }
+
+
+@router.get("/stories")
+async def list_stories(tenant: Tenant = Depends(require_tenant)) -> list[dict]:
+    """Running stories: groups of posts the archive found by similarity, named by the assistant."""
+    from kanalchi.ai.threads import thread_list
+
+    return await thread_list(tenant.id)
+
+
+@router.get("/stories/{slug}")
+async def story_detail(
+    slug: str, tenant: Tenant = Depends(require_tenant), db: AsyncSession = Depends(get_db)
+) -> dict:
+    from kanalchi.core.models import Thread, ThreadPost
+
+    thread = await db.scalar(select(Thread).where(Thread.tenant_id == tenant.id, Thread.slug == slug))
+    if thread is None:
+        raise HTTPException(404, "story not found")
+    post_ids = (
+        await db.scalars(
+            select(ThreadPost.post_id)
+            .join(Post, Post.id == ThreadPost.post_id)
+            .where(ThreadPost.thread_id == thread.id)
+            .order_by(Post.date)
+        )
+    ).all()
+    return {
+        "slug": thread.slug,
+        "title": thread.title or {},
+        "summary": thread.summary or {},
+        "first_at": thread.first_at,
+        "last_at": thread.last_at,
+        "post_count": thread.post_count,
+        "items": await _posts_by_ids(db, tenant, list(post_ids)),
+    }
+
+
+@router.get("/tags/{slug}/summary")
+async def tag_summary(
+    slug: str, tenant: Tenant = Depends(require_tenant), db: AsyncSession = Depends(get_db)
+) -> dict:
+    """What the channel has said about this entity over time, if a summary has been generated."""
+    from kanalchi.core.models import EntitySummary
+
+    tag = await db.scalar(select(Tag).where(Tag.tenant_id == tenant.id, Tag.slug == slug))
+    if tag is None:
+        raise HTTPException(404, "tag not found")
+    summary = await db.get(EntitySummary, tag.id)
+    if summary is None:
+        return {"available": False}
+    return {
+        "available": True,
+        "summary": summary.summary or {},
+        "citations": summary.citations or [],
+        "generated_at": summary.generated_at,
+        "is_stale": summary.is_stale,
+    }

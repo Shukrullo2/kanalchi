@@ -22,6 +22,13 @@ Roles: viewer (public), blogger (`/studio`, Telegram Login + channel-admin check
 `make dev-infra && make migrate && make seed && make api` (:8001) · `kanalchi seed-dev --posts 24` for synthetic posts · `make web` (:3001) · `make worker-*` ·
 `make migration m="msg"` · `make test` · `make lint`. Dev ports are offset (5433/6380/9002/8443) to avoid collisions.
 
+## Phase status
+Phases 0-5 are in: scaffold, ingestion + public blog, extraction/taxonomy/tags, viewer chat,
+blogger studio, admin ops + enrichment (stories, entity summaries, costs, alerts).
+No Anthropic or Voyage key exists in this environment, so every model call is unit-tested but never
+exercised end to end. `kanalchi seed-dev --posts N` and `kanalchi seed-tags` give you demo content
+and a hand-made taxonomy, which is enough to work on search, tags and every page without keys.
+
 ## Conventions
 - Timestamps are tz-aware UTC. IDs are bigint. Tenant status: onboarding|backfilling|indexing|active|paused|error|archived.
 - Tag slugs are stable across taxonomy rebuilds; manual edits (`is_pinned`, merges, aliases) always win on rebuild.

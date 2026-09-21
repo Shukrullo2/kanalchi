@@ -40,6 +40,44 @@ make deploy
 
 Caddy issues certificates on demand for tenant domains that the admin has registered and DNS-verified.
 
+## Operations
+
+### Backups and restore
+
+The `backup` service dumps Postgres nightly at 03:00 UTC into the MinIO `backups` bucket and keeps
+14 days. Media lives in MinIO itself; mirror that bucket off-site as well if the channel content
+matters to you (`mc mirror`).
+
+Restore into a clean stack:
+
+```bash
+infra/scripts/restore.sh kanalchi-20260921T030000Z.dump
+```
+
+That stops the application containers, recreates the database, restores the dump and starts them
+again. Practise it once before you need it: an untested backup is not a backup.
+
+### What to watch
+
+The platform bot messages every allow-listed admin when something needs a human, at most once an
+hour per issue:
+
+- a Telegram account has been signed out, which stops ingestion for its channels
+- an extraction batch has been running for over 24 hours
+- platform assistant spend has passed 80% of the daily cap
+- `worker-telegram` has stopped reporting in
+
+`/costs` on the admin domain shows spend by day, purpose, model and channel, all from measured
+`usage` rather than estimates. Watch the cache hit rate there: if it drops below about 30%,
+something volatile has crept into a cached prompt prefix and every call is paying full price.
+
+### Cost control
+
+Three independent limits, checked before any model call: a per-IP and per-visitor rate limit on
+reader chat, a per-channel daily dollar budget, and a platform-wide daily cap. Bulk extraction goes
+through the Message Batches API at half price, and the admin sees a measured cost estimate before a
+batch is submitted.
+
 ## Repository layout
 
 ```

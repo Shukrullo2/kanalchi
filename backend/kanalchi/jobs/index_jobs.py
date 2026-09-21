@@ -153,3 +153,30 @@ async def recompute_counts(tenant_id: int) -> dict[str, Any]:
 
     await _recompute(tenant_id)
     return {"ok": True}
+
+
+@app.task(queue="taxonomy", name="index.build_threads", retry=0)
+async def build_threads(tenant_id: int, job_run_id: int | None = None) -> dict[str, Any]:
+    from kanalchi.ai.threads import build_threads as _build
+
+    async with job_run(job_run_id):
+        return await _build(tenant_id, job_run_id=job_run_id)
+
+
+@app.task(queue="index", name="index.entity_summary", retry=1)
+async def entity_summary(tenant_id: int, tag_id: int) -> dict[str, Any]:
+    from kanalchi.ai.threads import build_entity_summary
+
+    return await build_entity_summary(tenant_id, tag_id)
+
+
+@app.task(queue="index", name="index.refresh_summaries", retry=0)
+async def refresh_summaries(tenant_id: int, limit: int = 10) -> dict[str, Any]:
+    """Regenerate the summaries that new posts have made stale, a few at a time."""
+    from kanalchi.ai.threads import mark_summaries_stale, stale_summary_tag_ids
+
+    await mark_summaries_stale(tenant_id)
+    tag_ids = await stale_summary_tag_ids(tenant_id, limit=limit)
+    for tag_id in tag_ids:
+        await entity_summary.defer_async(tenant_id=tenant_id, tag_id=tag_id)
+    return {"queued": len(tag_ids)}

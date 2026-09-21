@@ -24,6 +24,7 @@ export default async function TenantLayout({ children }: { children: React.React
           { href: "/", label: nav("home") },
           { href: "/tags", label: nav("tags") },
           { href: "/search", label: nav("search") },
+          { href: "/stories", label: nav("stories") },
           { href: "/top", label: nav("top") },
           { href: "/chat", label: nav("chat") },
         ]}

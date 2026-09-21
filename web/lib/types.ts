@@ -252,3 +252,30 @@ export type StudioSettings = {
   webhook_ready: boolean;
   locales: string[];
 };
+
+export type CostsOut = {
+  days: number;
+  total_usd: number;
+  by_day: { day: string; usd: number; input_tokens: number; output_tokens: number }[];
+  by_purpose: { purpose: string; usd: number; requests: number }[];
+  by_model: { model: string; usd: number; requests: number }[];
+  by_tenant: { id: number; domain: string; usd: number }[];
+  cache_hit_rate: number | null;
+  platform_daily_cap_usd: number;
+};
+
+export type StoryOut = {
+  slug: string;
+  title: Record<string, string>;
+  summary: Record<string, string>;
+  first_at: string | null;
+  last_at: string | null;
+  post_count: number;
+  citations: number[];
+};
+
+export type StoryDetail = StoryOut & { items: PostOut[] };
+
+export type EntitySummaryOut =
+  | { available: false }
+  | { available: true; summary: Record<string, string>; citations: number[]; generated_at: string; is_stale: boolean };
