@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { DimensionTabs } from "@/components/tags/DimensionTabs";
-import { TagCard } from "@/components/tags/TagCard";
+import { TagCloud } from "@/components/tags/TagCloud";
 import { apiFetch } from "@/lib/api";
 import { dimensionLabel } from "@/lib/labels";
 import type { DimensionOut, TagOut } from "@/lib/types";
@@ -20,12 +20,11 @@ export async function generateMetadata({ params }: Props) {
 
 export default async function DimensionPage({ params }: Props) {
   const { dimension } = await params;
-  const [dimensions, tags, locale, t, tc] = await Promise.all([
+  const [dimensions, tags, locale, t] = await Promise.all([
     apiFetch<DimensionOut[]>("/api/dimensions"),
     apiFetch<TagOut[]>(`/api/tags?dimension=${encodeURIComponent(dimension)}&limit=500`),
     getLocale(),
     getTranslations("tags"),
-    getTranslations("common"),
   ]);
   const dim = dimensions.find((d) => d.key === dimension);
   if (!dim) notFound();
@@ -44,10 +43,8 @@ export default async function DimensionPage({ params }: Props) {
       {tags.length === 0 ? (
         <p className="py-16 text-center text-sm text-muted-foreground">{t("empty")}</p>
       ) : (
-        <div className="tag-grid mt-5">
-          {tags.map((tag) => (
-            <TagCard key={tag.slug} tag={tag} locale={locale} countLabel={tc("posts", { count: tag.post_count })} />
-          ))}
+        <div className="mt-6">
+          <TagCloud tags={tags} locale={locale} />
         </div>
       )}
     </div>

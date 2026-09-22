@@ -420,100 +420,65 @@
   @media (min-width: 46rem) { .archive-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (min-width: 72rem) { .archive-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 
-  /* --- Tag cards -----------------------------------------------------------
-     A square picture with the name beneath, sized so a dozen subjects fit on a
-     phone screen and forty on a desktop one. The tone bar along the top edge is
-     the group the tag belongs to, kept when the picture is missing too. */
-  /* Roomy cards on a desktop, but the minimum yields on a narrow screen so a
-     phone still gets two to a row — one card per row turns sixty subjects into
-     a very long scroll. */
-  .tag-grid {
-    display: grid;
-    gap: 1rem;
-    grid-template-columns: repeat(auto-fill, minmax(min(12.5rem, 47%), 1fr));
+  /* --- The index as a cloud of words ---------------------------------------
+     Size is the measure, on a log scale because the counts are: the largest
+     subject here has 650 posts and the median has four, so a linear scale would
+     flatten everything below the top few into one smallest size.
+
+     Colour follows the same weight. A subject the channel keeps returning to is
+     set in its group's tone at full strength; one mentioned twice recedes to
+     grey, so the eye lands on what matters without anything being hidden.
+
+     Padding, radius and the count are all in `em`, so a word scales as one
+     piece rather than a big word in a small box. */
+  .tag-cloud {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem;
   }
 
-  .tag-card {
+  .tag-word {
+    --w: 0;
     --tone: var(--muted-foreground);
-    display: flex;
-    flex-direction: column;
-    border-radius: 0.75rem;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.45em;
+    padding: 0.4em 0.75em;
+    border-radius: 0.6em;
     border: 1px solid var(--border);
+    font-size: calc(0.8125rem + var(--w) * 1.0625rem);
+    font-weight: 600;
+    line-height: 1.2;
+    /* Plain colours first: a browser without `color-mix` still gets a readable
+       cloud, just without the gradient of emphasis. */
+    color: var(--foreground);
     background: var(--surface);
-    overflow: hidden;
-    transition: border-color 0.18s, transform 0.18s, box-shadow 0.18s;
+    border-color: color-mix(in oklab, var(--tone) calc(var(--w) * 45%), var(--border));
+    color: color-mix(in oklab, var(--tone) calc(25% + var(--w) * 75%), var(--muted-foreground));
+    background: color-mix(in oklab, var(--tone) calc(var(--w) * 9%), var(--surface));
+    transition:
+      border-color 0.18s,
+      background 0.18s,
+      transform 0.18s;
   }
-  .tag-card[data-tier="theme"] { --tone: var(--primary); }
-  .tag-card[data-tier="entity"] { --tone: var(--accent); }
-  .tag-card:hover {
+  .tag-word[data-tier="theme"] {
+    --tone: var(--primary);
+  }
+  .tag-word[data-tier="entity"] {
+    --tone: var(--accent);
+  }
+  .tag-word:hover {
     border-color: var(--tone);
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
+    background: color-mix(in oklab, var(--tone) 16%, var(--surface));
+    transform: translateY(-1px);
   }
 
-  .tag-card-media {
-    position: relative;
-    display: block;
-    aspect-ratio: 4 / 3;
-    background: var(--surface-2);
-    overflow: hidden;
-  }
-  /* A logo keeps its whole shape rather than being cropped to fill, and sits on
-     a plate it can be seen against: most are dark marks made for white paper,
-     but some are white marks made for a dark header, and those get the navy. */
-  .tag-card-media[data-fit^="logo"] img {
-    object-fit: contain;
-    padding: 1.15rem;
-  }
-  .tag-card-media[data-fit="logo"] {
-    background: #fff;
-  }
-  .tag-card-media[data-fit="logo_light"] {
-    background: var(--surface-2);
-  }
-  .tag-card-media::after {
-    content: "";
-    position: absolute;
-    inset: 0 0 auto 0;
-    height: 3px;
-    background: var(--tone);
-  }
-  .tag-card-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .tag-card-initials {
-    display: grid;
-    place-items: center;
-    width: 100%;
-    height: 100%;
-    font-family: var(--font-display);
-    font-size: 1.6rem;
-    font-weight: 700;
-    color: #fff;
-  }
-
-  /* The name is the point of the card, so it gets its own line at a size you can
-     read across a room, and the count drops beneath it rather than competing for
-     width and squeezing longer names into an ellipsis. */
-  .tag-card-body {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    padding: 0.8rem 0.9rem 0.9rem;
-  }
-  .tag-card-name {
-    font-size: 1.0625rem;
-    font-weight: 700;
-    line-height: 1.25;
-    letter-spacing: -0.01em;
-    /* "Uzsanoatqurilishbank" is one word and wider than a card on a phone;
-       without this it is cut off mid-word instead of wrapping. */
-    overflow-wrap: anywhere;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-  .tag-card-count {
-    font-size: 0.8125rem;
+  /* The number rides along at a fixed fraction of the word, so it never competes
+     with it and never disappears under it either. */
+  .tag-word-count {
+    font-size: 0.68em;
+    font-weight: 500;
     font-variant-numeric: tabular-nums;
     color: var(--muted-foreground);
   }
