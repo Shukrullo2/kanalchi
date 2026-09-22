@@ -81,7 +81,15 @@ async def rebuild_chunks(post_ids: list[int]) -> int:
                     embedded_at=now,
                 )
             )
-        await db.execute(update(Post).where(Post.id.in_(touched)).values(index_status="embedded"))
+        # Only ever advances. This runs twice per post: once on the first pass, and
+        # again after extraction to add the synthetic Latin chunk — and that second
+        # call must not drag a `tagged` post back to `embedded`, which is an earlier
+        # stage and made 5,000 finished posts look unindexed.
+        await db.execute(
+            update(Post)
+            .where(Post.id.in_(touched), Post.index_status.in_(["pending", "embedded"]))
+            .values(index_status="embedded")
+        )
     log.info("index.embedded", posts=len(touched), chunks=len(payload))
     return len(payload)
 
