@@ -12,6 +12,7 @@ rebuild safe to run on a channel someone has already curated.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import UTC, datetime
 from typing import Any
@@ -42,8 +43,12 @@ from kanalchi.text.slug import slugify
 
 log = get_logger(__name__)
 
-CHUNK = 300
-MAX_CANDIDATES = 1500
+# Each proposed tag costs roughly 130 output tokens — canonical name, three
+# labels, aliases, description, parent, merged candidates. Three hundred of them
+# overran a 32k ceiling and every chunk came back truncated.
+CHUNK = 100
+# Per dimension. A browsable index wants a few hundred subjects, not a thousand.
+MAX_CANDIDATES = 400
 MIN_COUNT_ENTITY = 1
 MIN_COUNT_THEME = 3
 
@@ -186,7 +191,8 @@ async def aggregate_candidates(tenant_id: int) -> dict[str, int]:
 
 # --------------------------------------------------------------------- pass B
 def _min_count(dimension_key: str) -> int:
-    return MIN_COUNT_THEME if dimension_key == "themes" else MIN_COUNT_ENTITY
+    floor = get_settings().taxonomy_min_count
+    return max(floor, MIN_COUNT_THEME if dimension_key == "themes" else MIN_COUNT_ENTITY)
 
 
 async def _candidates_for(db, tenant_id: int, dim_id: int, dim_key: str) -> list[dict[str, Any]]:
@@ -203,10 +209,17 @@ async def _candidates_for(db, tenant_id: int, dim_id: int, dim_key: str) -> list
             .limit(MAX_CANDIDATES * 2)
         )
     ).scalars()
+    rows = list(rows)
+    # Rare-but-notable values earn a place: one mention on a post that went far
+    # still matters. "High engagement" has to mean high *for this channel*, though —
+    # the column holds a raw score averaging over a thousand here, so comparing it
+    # to 1.0 admitted 38,999 of 39,005 candidates and made the floor a no-op.
+    scores = sorted((c.mean_engagement or 0.0) for c in rows)
+    notable = scores[int(len(scores) * 0.9)] if scores else 0.0
+
     out = []
     for c in rows:
-        # Keep rare-but-notable values: a single mention with high engagement still matters.
-        if c.count < floor and c.mean_engagement < 1.0:
+        if c.count < floor and (c.mean_engagement or 0.0) < notable:
             continue
         out.append({"name": c.name, "count": c.count, "surface_forms": c.surface_forms or []})
         if len(out) >= MAX_CANDIDATES:
@@ -258,7 +271,10 @@ async def build(tenant_id: int, job_run_id: int | None = None) -> dict[str, Any]
             tenant_id=tenant_id,
             version_no=(last or 0) + 1,
             status="building",
-            model="claude-opus-5",
+            # What actually built it — this row is the audit trail for a proposal
+            # someone may apply months later, so it must not claim a model we
+            # did not use.
+            model=get_settings().taxonomy_model,
             built_at=datetime.now(UTC),
         )
         db.add(version)
@@ -270,17 +286,27 @@ async def build(tenant_id: int, job_run_id: int | None = None) -> dict[str, Any]
     stats: dict[str, Any] = {}
     total_cost = 0.0
 
-    for i, (dim_id, dim_key, description) in enumerate(dim_list):
+    gate = asyncio.Semaphore(get_settings().taxonomy_concurrency)
+    completed = 0
+
+    async def run_dimension(i: int, dim_id: int, dim_key: str, description: str) -> None:
+        nonlocal total_cost, completed
+        async with gate:
+            await _build_dimension(i, dim_id, dim_key, description)
+        completed += 1
+
+    async def _build_dimension(i: int, dim_id: int, dim_key: str, description: str) -> None:
+        nonlocal total_cost
         async with session_scope() as db:
             candidates = await _candidates_for(db, tenant_id, dim_id, dim_key)
             existing = await _existing_tags(db, tenant_id, dim_id)
         if not candidates:
-            continue
+            return
         await update_job_run(
             job_run_id,
             progress={
                 "stage": f"dimension {dim_key}",
-                "done": i,
+                "done": completed,
                 "total": len(dim_list),
                 "message": f"{len(candidates)} candidates",
             },
@@ -298,13 +324,15 @@ async def build(tenant_id: int, job_run_id: int | None = None) -> dict[str, Any]
                 user=prompts.taxonomy_user(dim_key, description, chunk, existing, proposed_names, profile),
                 schema=schema_of(TaxonomyProposal),
                 model=get_settings().taxonomy_model,
-                effort="high",
-                max_tokens=32000,
+                # Consolidating a list is not deep reasoning, and thinking is billed
+                # as output and counted against the same ceiling.
+                effort="medium",
+                max_tokens=64000,
             )
             total_cost += cost
             if not result:
                 log.warning("taxonomy.chunk_failed", tenant_id=tenant_id, dimension=dim_key, start=start)
-                continue
+                continue  # noqa: PERF203 — one bad chunk must not lose the dimension
             tags.extend(result.get("tags") or [])
             dropped.extend(result.get("dropped_candidates") or [])
             proposed_names = [t["canonical_name"] for t in tags]
@@ -316,6 +344,8 @@ async def build(tenant_id: int, job_run_id: int | None = None) -> dict[str, Any]
 
         proposal[dim_key] = {"tags": tags, "dropped_candidates": dropped}
         stats[dim_key] = {"candidates": len(candidates), "tags": len(tags), "dropped": len(dropped)}
+
+    await asyncio.gather(*(run_dimension(i, *d) for i, d in enumerate(dim_list)))
 
     async with session_scope() as db:
         v = await db.get(TaxonomyVersion, version_id)

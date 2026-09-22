@@ -160,6 +160,17 @@ async def complete_json(
         )
         return None, usd
     text = next((b.text for b in message.content if b.type == "text"), "")
+    if message.stop_reason == "max_tokens":
+        # The JSON is not malformed, it is unfinished. Saying "bad json" here sent
+        # me looking at the schema while the answer was that the ceiling was too low.
+        log.warning(
+            "claude.truncated",
+            purpose=purpose,
+            model=model,
+            max_tokens=max_tokens,
+            output_tokens=message.usage.output_tokens,
+        )
+        return None, usd
     try:
         return json.loads(text), usd
     except json.JSONDecodeError:

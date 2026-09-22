@@ -45,6 +45,13 @@ class Settings(BaseSettings):
     # output is reviewable: one proposal, a diff, applied by a human. Sonnet is a
     # reasonable default; set it to claude-opus-5 for a channel worth the extra.
     taxonomy_model: str = "claude-sonnet-5"
+    # How often a name must appear before it is worth asking a model to canonicalise
+    # it. At 1 the long tail of single mentions dominates: 39,000 candidates against
+    # 2,200 at a floor of 5, for the same 72% of actual mentions.
+    taxonomy_min_count: int = 5
+    # Dimensions are independent of each other; chunks within one are not, because
+    # each sees what earlier chunks proposed so they merge instead of duplicating.
+    taxonomy_concurrency: int = 5
     embed_model: str = "voyage-4"
     embed_dim: int = 1024
     # Voyage throttles hard until the account has a payment method (3 requests and
