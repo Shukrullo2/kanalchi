@@ -420,6 +420,48 @@
   @media (min-width: 46rem) { .archive-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (min-width: 72rem) { .archive-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 
+  /* --- The channel index ---------------------------------------------------
+     A ranked finding aid: the subject, a rule under it showing how much of the
+     archive it covers, and the count at the far end. The rule is the measure —
+     a filled row would read as a selected row, and nothing here is selected. */
+  .index-row {
+    position: relative;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1.25rem;
+    padding: 0.35rem 0 0.5rem;
+    font-size: 0.9375rem;
+  }
+  .index-row::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: 0.15rem;
+    height: 2px;
+    width: var(--weight, 0%);
+    background: var(--tone, var(--primary));
+    opacity: 0.5;
+    border-radius: 2px;
+    transition: opacity 0.15s;
+  }
+  .index-row:hover::after { opacity: 1; }
+  .index-row:hover .index-name { color: var(--foreground); }
+  .index-row[data-tier="entity"] { --tone: var(--accent); }
+  .index-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: color 0.15s;
+  }
+  .index-count {
+    flex: none;
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted-foreground);
+  }
+
   /* --- Tags ---------------------------------------------------------------
      Gold for what a post is about, sky for who or what it names, quiet for
      filing details. Always a word, never colour alone. */
