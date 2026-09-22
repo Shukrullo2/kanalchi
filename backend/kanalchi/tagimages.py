@@ -9,7 +9,11 @@ Three sources, in descending order of how reliably they are *right*:
 2. Wikidata, for people and places only. Not for organisations: searching
    "Markaziy bank" returns the generic concept `central bank`, whose picture is
    the US Federal Reserve. A confidently wrong logo is worse than none.
-3. Nothing — the card falls back to a post thumbnail, then to initials.
+3. A picture from one of the tag's own posts — but only a good one. Taking the
+   most-read post's media unconditionally filled the index with scans of
+   ministry letters and screenshots of price tables, because that is a great
+   deal of what an economics channel posts. `picture_quality` throws those out.
+4. Nothing, and the card draws the subject's initials.
 
 Everything is fetched once and stored in our own bucket. Hotlinking would make
 every page load wait on third-party servers and would hand each reader's IP to
@@ -26,7 +30,7 @@ from typing import Any
 from urllib.parse import quote, urljoin
 
 import httpx
-from PIL import Image
+from PIL import Image, ImageFilter, ImageStat
 from sqlalchemy import text, update
 
 from kanalchi.core import storage
@@ -342,3 +346,145 @@ async def fetch_images(tenant_id: int, limit: int = 500, concurrency: int = 6) -
 
     log.info("tagimage.done", tenant_id=tenant_id, checked=len(rows), **stored)
     return {"checked": len(rows), **stored}
+
+
+# ----------------------------------------------------------------- post pictures
+# A picture is judged on two numbers measured from the pixels themselves.
+#
+# `pale` is the share of near-white pixels and `saturation` is how much colour
+# there is. A photograph of people or a place has colour and little white; a
+# scanned decree, a screenshot of a rate table or a wall of text is pale and
+# grey. Measured across the index, documents sit at saturation under 35 with
+# more than half the frame near-white, and photographs are nowhere near that.
+DOC_PALE = 0.55
+DOC_SATURATION = 35.0
+# Below this there is nothing in the frame at all — a solid black or white
+# placeholder, of which the archive holds a few.
+BLANK_EDGE = 2.0
+BLANK_SATURATION = 5.0
+# A frame this dark is a night shot or an underexposed video still: on a card it
+# reads as a black rectangle whatever is technically in it.
+MIN_BRIGHTNESS = 45.0
+# Smaller than this it is an emoji or a spacer, not a picture of anything.
+MIN_PICTURE_PX = 150
+# How many of a tag's posts to look at before giving up on finding a good one.
+CANDIDATES_PER_TAG = 6
+
+
+def picture_quality(data: bytes) -> float | None:
+    """How well a post's image would serve as a subject's portrait.
+
+    Returns a score, higher being better, or None when the image should not be
+    used at all. The judgement is deliberately blunt: it is trying to separate
+    "a photograph of something" from "a picture of a document", which is the
+    difference that made the index look the way it did, and it does not need to
+    have opinions beyond that.
+    """
+    try:
+        image = Image.open(io.BytesIO(data))
+        image.draft("RGB", (320, 320))  # decode JPEGs small; we only need statistics
+        image = image.convert("RGB")
+    except Exception as exc:  # noqa: BLE001
+        log.debug("tagimage.unreadable_post_image", error=str(exc)[:120])
+        return None
+    if min(image.size) < MIN_PICTURE_PX:
+        return None
+
+    sample = image.resize((160, 160))
+    saturation = ImageStat.Stat(sample.convert("HSV")).mean[1]
+    grey = sample.convert("L")
+    edges = ImageStat.Stat(grey.filter(ImageFilter.FIND_EDGES)).mean[0]
+    histogram = grey.histogram()
+    pale = sum(histogram[206:]) / max(sum(histogram), 1)
+
+    if edges < BLANK_EDGE and saturation < BLANK_SATURATION:
+        return None
+    if ImageStat.Stat(grey).mean[0] < MIN_BRIGHTNESS:
+        return None
+    if pale > DOC_PALE and saturation < DOC_SATURATION:
+        return None
+    # Among what is left, prefer colour and penalise whitespace, so a portrait
+    # beats a pale infographic that scraped past the cut.
+    return saturation - 60.0 * pale
+
+
+CANDIDATES_SQL = text(
+    """
+SELECT t.id, m.id AS media_id, coalesce(m.thumb_key, m.object_key) AS key
+FROM tags t
+JOIN LATERAL (
+    SELECT m.id, m.thumb_key, m.object_key, p.views
+    FROM post_tags pt
+    JOIN posts p ON p.id = pt.post_id AND p.is_deleted = false
+    JOIN media m ON m.post_id = p.id AND m.status = 'stored'
+    WHERE pt.tag_id = t.id AND pt.tenant_id = :tenant_id
+    ORDER BY p.views DESC NULLS LAST
+    LIMIT :per_tag
+) m ON true
+WHERE t.tenant_id = :tenant_id AND t.status = 'active' AND t.post_count > 0
+  AND t.image_key IS NULL
+ORDER BY t.post_count DESC
+"""
+)
+
+
+async def choose_post_pictures(tenant_id: int, concurrency: int = 12) -> dict[str, Any]:
+    """Give every remaining tag the best picture its own posts can offer.
+
+    Two rules beyond quality. Tags are served in order of post count, so the
+    subjects a reader is most likely to look for get first pick. And an image
+    already spoken for is not reused: the channel's most-read post otherwise
+    became the portrait of a dozen different tags at once, which looked less
+    like an index than a printing error.
+    """
+    s = get_settings()
+    async with session_scope() as db:
+        rows = (
+            await db.execute(CANDIDATES_SQL, {"tenant_id": tenant_id, "per_tag": CANDIDATES_PER_TAG})
+        ).all()
+    if not rows:
+        return {"tags": 0, "chosen": 0}
+
+    by_tag: dict[int, list[str]] = {}
+    for tag_id, _media_id, key in rows:
+        if key:
+            by_tag.setdefault(tag_id, []).append(key)
+
+    gate = asyncio.Semaphore(concurrency)
+    cache: dict[str, float | None] = {}
+    lock = asyncio.Lock()
+
+    async def score(key: str) -> float | None:
+        """One image is a candidate for several tags; only judge it once."""
+        async with lock:
+            if key in cache:
+                return cache[key]
+        async with gate:
+            data = await storage.download_bytes(s.s3_bucket_media, key)
+        value = picture_quality(data) if data else None
+        async with lock:
+            cache[key] = value
+        return value
+
+    await asyncio.gather(*(score(k) for ks in by_tag.values() for k in ks))
+
+    taken: set[str] = set()
+    chosen: list[tuple[int, str]] = []
+    for tag_id, keys in by_tag.items():  # already ordered by post_count desc
+        ranked = sorted(
+            ((cache.get(k), k) for k in keys if cache.get(k) is not None and k not in taken),
+            key=lambda pair: pair[0],  # type: ignore[arg-type,return-value]
+            reverse=True,
+        )
+        if not ranked:
+            continue
+        key = ranked[0][1]
+        taken.add(key)
+        chosen.append((tag_id, key))
+
+    async with session_scope() as db:
+        for tag_id, key in chosen:
+            await db.execute(update(Tag).where(Tag.id == tag_id).values(image_key=key, image_source="post"))
+
+    log.info("tagimage.post_pictures", tenant_id=tenant_id, tags=len(by_tag), chosen=len(chosen))
+    return {"tags": len(by_tag), "images": len(cache), "chosen": len(chosen)}

@@ -104,44 +104,17 @@ async def list_tags(
 
         stmt = stmt.where(Tag.canonical_norm.like(f"%{normalize(q)}%"))
     rows = (await db.execute(stmt.order_by(Tag.post_count.desc()).limit(limit))).all()
-    thumbs = await tag_thumbnails(db, tenant.id, [t.id for t, _ in rows])
     return [
         {
             **tag_out(t, key),
-            # The subject's own picture first; a post it appeared in is the fallback.
-            "thumb_url": (f"/media/{t.image_key}" if t.image_key else thumbs.get(t.id)),
+            # Chosen ahead of time by `kanalchi.tagimages`, which ranks a logo or
+            # portrait above a picture from the tag's own posts, and would rather
+            # leave a tag without one than give it a scan of a document.
+            "thumb_url": (f"/media/{t.image_key}" if t.image_key else None),
             "image_source": t.image_source,
         }
         for t, key in rows
     ]
-
-
-async def tag_thumbnails(db: AsyncSession, tenant_id: int, tag_ids: list[int]) -> dict[int, str]:
-    """One picture per tag: the one from its most-read post that has any.
-
-    A tag has no image of its own, so it borrows the most representative thing the
-    channel published about it — which is also a better browsing cue than a name
-    alone. Roughly two in five tags have one; the rest fall back to type.
-    """
-    if not tag_ids:
-        return {}
-    rows = (
-        await db.execute(
-            text(
-                """
-                SELECT DISTINCT ON (pt.tag_id) pt.tag_id,
-                       coalesce(m.thumb_key, m.object_key) AS key
-                FROM post_tags pt
-                JOIN posts p ON p.id = pt.post_id AND p.is_deleted = false
-                JOIN media m ON m.post_id = p.id AND m.status = 'stored'
-                WHERE pt.tenant_id = :tenant_id AND pt.tag_id = ANY(:tag_ids)
-                ORDER BY pt.tag_id, p.views DESC NULLS LAST
-                """
-            ),
-            {"tenant_id": tenant_id, "tag_ids": tag_ids},
-        )
-    ).all()
-    return {tag_id: f"/media/{key}" for tag_id, key in rows if key}
 
 
 @router.get("/tags/{slug}")

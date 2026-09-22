@@ -7,7 +7,14 @@ import io
 import pytest
 from PIL import Image
 
-from kanalchi.tagimages import LIGHT_INK, LOGO_PX, MIN_ICON_PX, normalise_icon
+from kanalchi.tagimages import (
+    LIGHT_INK,
+    LOGO_PX,
+    MIN_ICON_PX,
+    MIN_PICTURE_PX,
+    normalise_icon,
+    picture_quality,
+)
 
 
 def _png(size: int, colour: tuple[int, int, int, int]) -> bytes:
@@ -78,3 +85,75 @@ def test_ignores_transparent_pixels_when_judging_tone() -> None:
     assert out is not None
     assert out[1] is False
     assert LIGHT_INK < 255
+
+
+# --------------------------------------------------------------- post pictures
+def _photo(size: int = 400) -> bytes:
+    """Something with colour and detail in it, the way a photograph has."""
+    image = Image.new("RGB", (size, size))
+    for x in range(size):
+        for y in range(size):
+            image.putpixel((x, y), ((x * 7) % 256, (y * 5) % 256, ((x + y) * 3) % 256))
+    buffer = io.BytesIO()
+    image.save(buffer, format="JPEG", quality=90)
+    return buffer.getvalue()
+
+
+def _document(size: int = 400) -> bytes:
+    """Grey text on white paper — a scanned letter or a screenshot of a table."""
+    image = Image.new("RGB", (size, size), (252, 252, 250))
+    for row in range(20, size - 20, 14):
+        for x in range(30, size - 30):
+            if x % 9 < 6:
+                for y in range(row, row + 4):
+                    image.putpixel((x, y), (40, 40, 45))
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def _flat(colour: tuple[int, int, int], size: int = 400) -> bytes:
+    buffer = io.BytesIO()
+    Image.new("RGB", (size, size), colour).save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def test_accepts_a_photograph() -> None:
+    assert picture_quality(_photo()) is not None
+
+
+def test_rejects_a_scanned_document() -> None:
+    """The whole point: an economics channel posts a great many of these."""
+    assert picture_quality(_document()) is None
+
+
+def test_rejects_a_blank_frame() -> None:
+    assert picture_quality(_flat((255, 255, 255))) is None
+    assert picture_quality(_flat((0, 0, 0))) is None
+
+
+def test_rejects_a_frame_too_dark_to_read() -> None:
+    """A night shot is a black rectangle on a card, whatever is in it."""
+    image = Image.new("RGB", (400, 400))
+    for x in range(400):
+        for y in range(400):
+            image.putpixel((x, y), (x % 18, y % 14, (x + y) % 20))
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    assert picture_quality(buffer.getvalue()) is None
+
+
+def test_rejects_something_too_small_to_be_a_picture() -> None:
+    assert picture_quality(_photo(size=MIN_PICTURE_PX - 50)) is None
+
+
+def test_rejects_bytes_that_are_not_an_image() -> None:
+    assert picture_quality(b"<html>404 not found</html>") is None
+
+
+def test_prefers_colour_over_whitespace() -> None:
+    """Between two usable pictures, the fuller one should win."""
+    colourful = picture_quality(_photo())
+    washed = picture_quality(_flat((250, 250, 180)))
+    assert colourful is not None
+    assert washed is None or colourful > washed

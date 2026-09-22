@@ -362,19 +362,29 @@ def seed_tags(domain: str = "demo.localhost") -> None:
 
 
 @app.command("tag-images")
-def tag_images_cmd(tenant_id: int, limit: int = 500) -> None:
+def tag_images_cmd(tenant_id: int, limit: int = 500, posts: bool = True) -> None:
     """Find and store a picture for each subject in the index.
 
     Organisation logos come from the site the channel itself links to; people and
     places come from Wikidata. Everything is stored in our own bucket, so pages
     never wait on someone else's server.
+
+    Whatever is left over then takes the best picture its own posts can offer,
+    which `--no-posts` skips. That pass reads every candidate image out of the
+    bucket, so it is much the slower of the two.
     """
     import asyncio
     import json as _json
 
-    from kanalchi.tagimages import fetch_images
+    from kanalchi.tagimages import choose_post_pictures, fetch_images
 
-    typer.echo(_json.dumps(asyncio.run(fetch_images(tenant_id, limit=limit)), indent=2))
+    async def _run() -> dict:
+        result = await fetch_images(tenant_id, limit=limit)
+        if posts:
+            result |= await choose_post_pictures(tenant_id)
+        return result
+
+    typer.echo(_json.dumps(asyncio.run(_run()), indent=2))
 
 
 @app.command("compare-models")

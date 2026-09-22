@@ -71,3 +71,13 @@ def public_media_url(host: str, key: str) -> str:
     """Media is served on the tenant's own domain under /media/<key> (Caddy → MinIO)."""
     s = get_settings()
     return f"{s.public_scheme}://{host}/media/{key}"
+
+
+async def download_bytes(bucket: str, key: str) -> bytes | None:
+    """Read an object back. None when it is missing rather than raising."""
+    async with _session.client(**_client_kwargs()) as s3:
+        try:
+            response = await s3.get_object(Bucket=bucket, Key=key)
+        except Exception:  # noqa: BLE001 — a missing key is an ordinary outcome here
+            return None
+        return await response["Body"].read()
