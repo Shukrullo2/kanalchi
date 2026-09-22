@@ -345,7 +345,15 @@ async def build(tenant_id: int, job_run_id: int | None = None) -> dict[str, Any]
         proposal[dim_key] = {"tags": tags, "dropped_candidates": dropped}
         stats[dim_key] = {"candidates": len(candidates), "tags": len(tags), "dropped": len(dropped)}
 
-    await asyncio.gather(*(run_dimension(i, *d) for i, d in enumerate(dim_list)))
+    # A dimension that dies takes its own chunks down, not the whole build: every
+    # completed chunk is already persisted, and forty calls are too expensive to
+    # discard because the last connection dropped.
+    outcomes = await asyncio.gather(
+        *(run_dimension(i, *d) for i, d in enumerate(dim_list)), return_exceptions=True
+    )
+    for (_, dim_key, _), outcome in zip(dim_list, outcomes, strict=True):
+        if isinstance(outcome, BaseException):
+            log.warning("taxonomy.dimension_failed", dimension=dim_key, error=str(outcome)[:200])
 
     async with session_scope() as db:
         v = await db.get(TaxonomyVersion, version_id)
