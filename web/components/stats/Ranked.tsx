@@ -42,7 +42,11 @@ export function RankedBars({
         );
         return (
           <li key={`${row.label}-${i}`}>
-            {row.href ? (
+            {row.href?.startsWith("http") ? (
+              <a href={row.href} target="_blank" rel="noreferrer" className="ranked-row">
+                {inner}
+              </a>
+            ) : row.href ? (
               <Link href={row.href} className="ranked-row">
                 {inner}
               </Link>

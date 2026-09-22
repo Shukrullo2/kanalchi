@@ -202,7 +202,12 @@ export default async function StatsPage() {
           <h2>{t("sources")}</h2>
           <p className="-mt-2 mb-4 text-sm text-muted-foreground">{t("sourcesHint")}</p>
           <RankedBars
-            rows={stats.by_domain.map((d) => ({ label: d.domain, value: d.links, hint: posts(d.posts) }))}
+            rows={stats.by_domain.map((d) => ({
+              label: d.domain,
+              value: d.links,
+              hint: posts(d.posts),
+              href: d.telegram ? `https://t.me/${d.domain.slice(1)}` : undefined,
+            }))}
             format={(v) => linksTpl.replace("{count}", compactNumber(v))}
           />
         </section>

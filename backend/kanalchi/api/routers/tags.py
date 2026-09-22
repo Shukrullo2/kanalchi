@@ -324,7 +324,9 @@ async def stats(tenant: Tenant = Depends(require_tenant), db: AsyncSession = Dep
     # at 02:00 UTC is a 7 a.m. post in Tashkent, and that is the fact a reader wants.
     tz = (tenant.settings or {}).get("timezone") or "Asia/Tashkent"
     scope = "tenant_id = :tenant_id AND is_deleted = false AND is_album_root = true"
-    params = {"tenant_id": tenant.id, "tz": tz}
+    channel = await _channel(db, tenant)
+    self_handle = f"@{channel.username.lower()}" if channel and channel.username else None
+    params = {"tenant_id": tenant.id, "tz": tz, "self_handle": self_handle}
 
     async def rows(sql: str):
         return (await db.execute(text(sql), params)).all()
@@ -400,10 +402,24 @@ async def stats(tenant: Tenant = Depends(require_tenant), db: AsyncSession = Dep
                    count(*) AS posts
             FROM posts WHERE {scope} GROUP BY 1, 2"""
     )
+    # A channel that links out to fifty other channels should not report one row
+    # saying "t.me". Telegram links are grouped by the channel they point at.
     by_domain = await rows(
-        """SELECT domain, count(*) AS links, count(DISTINCT post_id) AS posts
-           FROM post_links WHERE tenant_id = :tenant_id AND domain IS NOT NULL
-           GROUP BY 1 ORDER BY 2 DESC LIMIT 12"""
+        """WITH labelled AS (
+             SELECT post_id,
+                    CASE WHEN domain = 't.me'
+                              AND url !~ 't\\.me/(joinchat|c)/'
+                              AND url !~ 't\\.me/\\+'
+                              AND substring(url from 't\\.me/([A-Za-z0-9_]{3,})') IS NOT NULL
+                         THEN '@' || lower(substring(url from 't\\.me/([A-Za-z0-9_]{3,})'))
+                         ELSE domain END AS source
+             FROM post_links
+             WHERE tenant_id = :tenant_id AND domain IS NOT NULL
+           )
+           SELECT source, count(*) AS links, count(DISTINCT post_id) AS posts
+           FROM labelled
+           WHERE source IS DISTINCT FROM :self_handle
+           GROUP BY 1 ORDER BY 2 DESC LIMIT 15"""
     )
 
     async def top_of(dimension: str, limit: int = 10):
@@ -465,7 +481,10 @@ async def stats(tenant: Tenant = Depends(require_tenant), db: AsyncSession = Dep
         ),
         "by_language": [{"language": lang, "posts": p} for lang, p in by_language],
         "by_weekday_hour": [{"dow": d, "hour": h, "posts": p} for d, h, p in by_weekday_hour],
-        "by_domain": [{"domain": d, "links": lk, "posts": p} for d, lk, p in by_domain],
+        "by_domain": [
+            {"domain": d, "links": lk, "posts": p, "telegram": d.startswith("@")}
+            for d, lk, p in by_domain
+        ],
         "indexed_posts": indexed_posts or 0,
         "top_themes": tag_rows(await top_of("themes")),
         "top_people": tag_rows(await top_of("people")),

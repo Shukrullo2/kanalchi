@@ -1,5 +1,6 @@
 import { ExternalIcon, EyeIcon, ShareIcon } from "@/components/Icons";
 import { compactNumber, fullDate } from "@/lib/format";
+import { linkLabel } from "@/lib/links";
 import type { PostOut } from "@/lib/types";
 import { MediaGallery } from "./MediaGallery";
 import { PostEntry } from "./PostEntry";
@@ -127,7 +128,7 @@ export function PostCard({
               >
                 {l.title ?? l.url}
               </a>
-              <span className="shrink-0 text-xs text-muted-foreground">{l.domain}</span>
+              <span className="shrink-0 text-xs text-muted-foreground">{linkLabel(l.url, l.domain)}</span>
             </li>
           ))}
         </ul>

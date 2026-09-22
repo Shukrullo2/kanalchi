@@ -203,7 +203,7 @@ export type ChannelStats = {
   by_length: { bucket: "short" | "medium" | "long" | "essay"; posts: number; mean_views: number }[];
   by_language: { language: string; posts: number }[];
   by_weekday_hour: { dow: number; hour: number; posts: number }[];
-  by_domain: { domain: string; links: number; posts: number }[];
+  by_domain: { domain: string; links: number; posts: number; telegram: boolean }[];
   indexed_posts: number;
   top_themes: StatTag[];
   top_people: StatTag[];
