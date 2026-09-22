@@ -421,66 +421,90 @@
   @media (min-width: 72rem) { .archive-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 
   /* --- The index as a cloud of words ---------------------------------------
-     Size is the measure, on a log scale because the counts are: the largest
-     subject here has 650 posts and the median has four, so a linear scale would
-     flatten everything below the top few into one smallest size.
+     Laid out on the server (see `lib/wordcloud.ts`) and drawn as SVG, so the
+     words are real links and there is nothing to run in the browser.
 
-     Colour follows the same weight. A subject the channel keeps returning to is
-     set in its group's tone at full strength; one mentioned twice recedes to
-     grey, so the eye lands on what matters without anything being hidden.
-
-     Padding, radius and the count are all in `em`, so a word scales as one
-     piece rather than a big word in a small box. */
+     Weight drives both size and colour: a subject the channel keeps returning
+     to is set large in its group's tone, one mentioned twice recedes to grey.
+     The text itself carries no box — a cloud is words, and a border round each
+     one turns it back into a grid of buttons. */
   .tag-cloud {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+    font-family: var(--font-sans);
+    font-weight: 700;
+    letter-spacing: -0.015em;
+  }
+  /* Exactly one of the two clouds is ever shown; see the note in TagCloud. */
+  .tag-cloud-packed {
+    display: none;
+  }
+  .tag-cloud-small {
+    display: block;
+  }
+  @media (min-width: 46rem) {
+    .tag-cloud-packed {
+      display: block;
+    }
+    .tag-cloud-small {
+      display: none;
+    }
+  }
+
+  /* The phone's cloud: words set in a line and wrapped as text, which reflows
+     to any width instead of being scaled down to fit one. */
+  .tag-cloud-flow {
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
-    gap: 0.5rem;
+    justify-content: center;
+    gap: 0.2rem 0.65rem;
+    text-align: center;
   }
-
-  .tag-word {
+  .flow-word {
     --w: 0;
     --tone: var(--muted-foreground);
-    display: inline-flex;
-    align-items: baseline;
-    gap: 0.45em;
-    padding: 0.4em 0.75em;
-    border-radius: 0.6em;
-    border: 1px solid var(--border);
-    font-size: calc(0.8125rem + var(--w) * 1.0625rem);
-    font-weight: 600;
-    line-height: 1.2;
-    /* Plain colours first: a browser without `color-mix` still gets a readable
-       cloud, just without the gradient of emphasis. */
-    color: var(--foreground);
-    background: var(--surface);
-    border-color: color-mix(in oklab, var(--tone) calc(var(--w) * 45%), var(--border));
-    color: color-mix(in oklab, var(--tone) calc(25% + var(--w) * 75%), var(--muted-foreground));
-    background: color-mix(in oklab, var(--tone) calc(var(--w) * 9%), var(--surface));
-    transition:
-      border-color 0.18s,
-      background 0.18s,
-      transform 0.18s;
+    font-weight: 700;
+    line-height: 1.3;
+    letter-spacing: -0.015em;
+    /* A long single word is wider than a phone; wrap it rather than let it
+       push the cloud sideways. */
+    overflow-wrap: anywhere;
+    color: var(--muted-foreground);
+    color: color-mix(in oklab, var(--tone) calc(22% + var(--w) * 78%), var(--muted-foreground));
   }
-  .tag-word[data-tier="theme"] {
+  .flow-word[data-tier="theme"] {
     --tone: var(--primary);
   }
-  .tag-word[data-tier="entity"] {
+  .flow-word[data-tier="entity"] {
     --tone: var(--accent);
   }
-  .tag-word:hover {
-    border-color: var(--tone);
-    background: color-mix(in oklab, var(--tone) 16%, var(--surface));
-    transform: translateY(-1px);
-  }
 
-  /* The number rides along at a fixed fraction of the word, so it never competes
-     with it and never disappears under it either. */
-  .tag-word-count {
-    font-size: 0.68em;
-    font-weight: 500;
-    font-variant-numeric: tabular-nums;
-    color: var(--muted-foreground);
+  .cloud-word {
+    --w: 0;
+    --tone: var(--muted-foreground);
+    /* A plain colour first, so a browser without `color-mix` still gets a
+       readable cloud, just without the gradient of emphasis. */
+    fill: var(--muted-foreground);
+    fill: color-mix(in oklab, var(--tone) calc(22% + var(--w) * 78%), var(--muted-foreground));
+    transition: fill 0.18s;
+    cursor: pointer;
+  }
+  .cloud-word[data-tier="theme"] {
+    --tone: var(--primary);
+  }
+  .cloud-word[data-tier="entity"] {
+    --tone: var(--accent);
+  }
+  .cloud-word:hover {
+    fill: var(--foreground);
+  }
+  .cloud-word:focus-visible {
+    outline: 2px solid var(--tone);
+    outline-offset: 2px;
+    border-radius: 0.2rem;
   }
 
   /* --- The channel index ---------------------------------------------------
