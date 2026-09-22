@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert
 
 from kanalchi.core.logging import get_logger
@@ -107,12 +107,16 @@ async def record_candidate(
             set_={
                 "count": TagCandidate.__table__.c.count + 1,
                 "last_seen_at": func.now(),
-                "sample_post_ids": func.array(
-                    func.array_cat(TagCandidate.__table__.c.sample_post_ids, stmt.excluded.sample_post_ids)
-                )[1:5],
-                "surface_forms": func.array_cat(
-                    TagCandidate.__table__.c.surface_forms, stmt.excluded.surface_forms
-                )[1:8],
+                # Keep a bounded sample of where the candidate was seen. Written as
+                # SQL because a Postgres array slice needs literal bounds: rendered
+                # through the ORM the bounds come out as bind parameters and the
+                # server rejects `array[$1:$2]` outright.
+                "sample_post_ids": text(
+                    "(array_cat(tag_candidates.sample_post_ids, excluded.sample_post_ids))[1:5]"
+                ),
+                "surface_forms": text(
+                    "(array_cat(tag_candidates.surface_forms, excluded.surface_forms))[1:8]"
+                ),
             },
         )
     )

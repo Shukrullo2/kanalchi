@@ -13,7 +13,7 @@ from typing import Any
 
 from anthropic.types.message_create_params import MessageCreateParamsNonStreaming
 from anthropic.types.messages.batch_create_params import Request
-from sqlalchemy import func, select, update
+from sqlalchemy import Float, cast, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 
 from kanalchi.ai import prompts
@@ -28,6 +28,9 @@ from kanalchi.core.settings import get_settings
 log = get_logger(__name__)
 
 BATCH_SIZE = 5000
+# What a post costs to write out when nothing has been measured yet: this
+# schema plus adaptive thinking runs near 1,100 tokens on real Uzbek posts.
+DEFAULT_OUTPUT_TOKENS = 1100
 MAX_IN_FLIGHT = 3
 MAX_ATTEMPTS = 3
 MAX_TOKENS = 6000
@@ -178,14 +181,36 @@ async def estimate_cost(tenant_id: int, sample: int = 10) -> dict[str, Any]:
     counts = [await count_tokens(s.extract_model, system, prompts.extraction_user(p)) for p in posts]
     avg_in = sum(counts) / len(counts)
     pending = len(await pending_extract_ids(tenant_id, limit=100000))
-    per_post = cost_usd(s.extract_model, Usage(input_tokens=int(avg_in), output_tokens=300), batch=True)
+
+    # Output dominates the bill: it is priced five times input, and adaptive
+    # thinking is billed as output too. Guessing it badly under-quotes the job —
+    # a flat 300 here quoted $35 for work that cost $32 for its first four-tenths.
+    # Measure it from this channel's own completed extractions when there are any.
+    avg_out = await db_avg_output(tenant_id) or DEFAULT_OUTPUT_TOKENS
+    per_post = cost_usd(
+        s.extract_model, Usage(input_tokens=int(avg_in), output_tokens=int(avg_out)), batch=True
+    )
     return {
         "posts_total": total or 0,
         "posts_pending": pending,
         "avg_input_tokens": int(avg_in),
+        "avg_output_tokens": int(avg_out),
+        "output_measured": avg_out is not None,
         "estimated_usd": round(per_post * pending, 2),
         "model": s.extract_model,
     }
+
+
+async def db_avg_output(tenant_id: int) -> float | None:
+    """Mean output tokens across this channel's succeeded extractions, if any have run."""
+    async with session_scope() as db:
+        return await db.scalar(
+            select(func.avg(cast(Extraction.usage["output_tokens"].astext, Float))).where(
+                Extraction.tenant_id == tenant_id,
+                Extraction.status == "succeeded",
+                Extraction.usage.is_not(None),
+            )
+        )
 
 
 async def submit_batch(tenant_id: int, post_ids: list[int] | None = None) -> dict[str, Any]:
