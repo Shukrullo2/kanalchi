@@ -98,18 +98,29 @@ async def build_prompt(tenant_id: int) -> tuple[list[dict[str, Any]], str]:
     return blocks, (channel.title if channel else (tenant.title or ""))
 
 
+# Haiku 4.5 rejects both `output_config.effort` and adaptive thinking, so a request
+# aimed at it has to be shaped differently. Everything else — system prompt, user
+# content, schema — stays identical, which is what makes a model comparison fair.
+HAIKU_PREFIX = "claude-haiku"
+
+
 def _request(post: dict[str, Any], system: list[dict[str, Any]], model: str) -> Request:
-    return Request(
-        custom_id=custom_id(post["id"]),
-        params=MessageCreateParamsNonStreaming(
-            model=model,
-            max_tokens=MAX_TOKENS,
-            system=system,
-            messages=[{"role": "user", "content": prompts.extraction_user(post)}],
-            thinking={"type": "adaptive"},
-            output_config={"effort": "low", "format": json_format(schema_of(PostExtraction))},
-        ),
-    )
+    output_config: dict[str, Any] = {"format": json_format(schema_of(PostExtraction))}
+    params: dict[str, Any] = {
+        "model": model,
+        "max_tokens": MAX_TOKENS,
+        "system": system,
+        "messages": [{"role": "user", "content": prompts.extraction_user(post)}],
+        "output_config": output_config,
+    }
+    if model.startswith(HAIKU_PREFIX):
+        # No thinking: Haiku 4.5 takes budget_tokens rather than adaptive, and this
+        # is a fill-in-the-schema task rather than a reasoning one.
+        params["thinking"] = {"type": "disabled"}
+    else:
+        output_config["effort"] = "low"
+        params["thinking"] = {"type": "adaptive"}
+    return Request(custom_id=custom_id(post["id"]), params=MessageCreateParamsNonStreaming(**params))
 
 
 async def _posts_payload(db, post_ids: list[int], channel_title: str) -> list[dict[str, Any]]:

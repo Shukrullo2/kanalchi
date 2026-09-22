@@ -361,6 +361,28 @@ def seed_tags(domain: str = "demo.localhost") -> None:
     asyncio.run(_run())
 
 
+@app.command("compare-models")
+def compare_models_cmd(
+    tenant_id: int,
+    candidate: str = "claude-haiku-4-5",
+    sample: int = 100,
+) -> None:
+    """Score a cheaper model against what the primary model already extracted.
+
+    Runs `candidate` over posts that already have a stored extraction and reports
+    how much of the entity and theme labelling it reproduces, plus what each side
+    cost. Spends real money on the candidate calls — a hundred posts on Haiku is
+    a few tens of cents.
+    """
+    import asyncio
+    import json as _json
+
+    from kanalchi.ai.compare import compare_models
+
+    report = asyncio.run(compare_models(tenant_id, candidate, sample=sample))
+    typer.echo(_json.dumps(report, ensure_ascii=False, indent=2))
+
+
 @app.command("rotate-keys")
 def rotate_keys() -> None:
     """Re-encrypt sessions and bot tokens with the primary APP_MASTER_KEY (set APP_MASTER_KEY_PREV first)."""

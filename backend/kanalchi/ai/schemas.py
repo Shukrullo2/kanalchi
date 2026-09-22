@@ -11,8 +11,10 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-EXTRACTOR_VERSION = 1
-EXTRACT_PROMPT_VERSION = "x1"
+# v2 dropped five fields nothing consumed. Bumped so v1 results — which carry
+# amounts and dates the v2 prompt no longer asks for — are never mistaken for v2.
+EXTRACTOR_VERSION = 2
+EXTRACT_PROMPT_VERSION = "x2"
 
 Lang = Literal["uz-Latn", "uz-Cyrl", "ru", "en", "other"]
 EntityType = Literal[
@@ -56,23 +58,10 @@ class ThemeCandidate(Strict):
     confidence: float
 
 
-class DateRef(Strict):
-    text: str
-    iso: str | None
-    precision: Literal["day", "month", "year", "range", "relative"]
-    relation: Literal["past", "future", "ongoing", "unclear"]
-
-
 class LinkAnnotation(Strict):
     url: str
     kind: Literal["news", "social", "official", "video", "shop", "telegram", "document", "other"]
     described_as: str | None
-
-
-class Amount(Strict):
-    value: str
-    unit: str | None
-    what: str
 
 
 class CustomValue(Strict):
@@ -84,7 +73,6 @@ class PostExtraction(Strict):
     """Everything extracted from one post in a single call."""
 
     language_primary: Literal["uz-Latn", "uz-Cyrl", "ru", "en", "mixed", "other"]
-    language_secondary: list[Lang]
     format: PostFormat
     title: str = Field(description="<= 80 characters, in the language of the post")
     summary: str = Field(description="<= 280 characters, in the language of the post")
@@ -92,14 +80,10 @@ class PostExtraction(Strict):
     entities: list[Entity]
     custom: list[CustomValue]
     links: list[LinkAnnotation]
-    dates_referenced: list[DateRef]
-    amounts: list[Amount]
     sentiment: Literal["positive", "neutral", "negative", "mixed"]
-    stance_target: str | None
     stance: Literal["supportive", "critical", "neutral", "ambivalent"] | None
     key_claims: list[str]
     is_ad: bool
-    advertiser: str | None
     has_call_to_action: bool
     is_low_content: bool
     hashtags: list[str]

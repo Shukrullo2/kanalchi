@@ -46,7 +46,6 @@ def test_nested_objects_also_forbid_extras():
 def test_extraction_validates_a_realistic_payload():
     payload = {
         "language_primary": "uz-Latn",
-        "language_secondary": ["ru"],
         "format": "news",
         "title": "Toshkentda yangi loyiha",
         "summary": "Hokimlik yangi qurilish loyihasini e'lon qildi.",
@@ -64,14 +63,10 @@ def test_extraction_validates_a_realistic_payload():
         ],
         "custom": [{"dimension": "custom_districts", "values": ["Chilonzor"]}],
         "links": [{"url": "https://gazeta.uz", "kind": "news", "described_as": None}],
-        "dates_referenced": [{"text": "bugun", "iso": None, "precision": "relative", "relation": "past"}],
-        "amounts": [{"value": "12", "unit": "mlrd so'm", "what": "budget"}],
         "sentiment": "neutral",
-        "stance_target": None,
         "stance": None,
         "key_claims": ["Loyiha e'lon qilindi"],
         "is_ad": False,
-        "advertiser": None,
         "has_call_to_action": False,
         "is_low_content": False,
         "hashtags": ["toshkent"],
