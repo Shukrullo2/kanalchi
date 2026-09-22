@@ -35,12 +35,13 @@ POST_CHARS = 6000
 
 
 def custom_id(post_id: int) -> str:
-    return f"x:{EXTRACTOR_VERSION}:{post_id}"
+    """The Batches API only accepts `[a-zA-Z0-9_-]{1,64}` here, so no colons."""
+    return f"x-{EXTRACTOR_VERSION}-{post_id}"
 
 
 def parse_custom_id(cid: str) -> int | None:
     try:
-        return int(cid.rsplit(":", 1)[1])
+        return int(cid.rsplit("-", 1)[1])
     except (IndexError, ValueError):
         return None
 
