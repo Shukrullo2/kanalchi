@@ -147,5 +147,10 @@
     "stance": "Stance",
     "themeDrift": "What it covered, year by year",
     "themeDriftHint": "Each band is a theme; the width is its share of that quarter."
+  },
+  "tags": {
+    "title": "The index",
+    "intro": "Every post is filed under the subjects it covers and the people, bodies and places it names. These groups were built from the channel's own history.",
+    "empty": "Nothing filed under this group yet."
   }
 }

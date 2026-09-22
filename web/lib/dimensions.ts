@@ -54,3 +54,16 @@ export function toneVar(dimension?: string | null): string {
   if (tier === "entity") return "var(--accent)";
   return "var(--muted-foreground)";
 }
+
+/**
+ * Groups in the order a reader wants them: what posts are about, then who and
+ * what they name, then how they were filed. Left alone, the biggest group wins
+ * the front page — and that is `link_domains`, a thousand hostnames, which is
+ * the least interesting thing the index knows.
+ */
+export function byDimensionTier<T extends { key: string; tag_count: number }>(dimensions: T[]): T[] {
+  const rank: Record<Tier, number> = { theme: 0, entity: 1, meta: 2 };
+  return [...dimensions].sort(
+    (a, b) => rank[tierOf(a.key)] - rank[tierOf(b.key)] || b.tag_count - a.tag_count,
+  );
+}

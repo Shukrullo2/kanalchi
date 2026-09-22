@@ -147,5 +147,10 @@
     "stance": "Ohang",
     "themeDrift": "Yillar bo‘yicha nimani yoritgan",
     "themeDriftHint": "Har bir chiziq — mavzu; kengligi — chorakdagi ulushi."
+  },
+  "tags": {
+    "title": "Ko‘rsatkich",
+    "intro": "Har bir post o‘zi yoritgan mavzular va tilga olgan odamlar, idoralar hamda joylar bo‘yicha saralangan. Bu guruhlar kanalning o‘z tarixidan qurilgan.",
+    "empty": "Bu guruhda hozircha hech nima yo‘q."
   }
 }
