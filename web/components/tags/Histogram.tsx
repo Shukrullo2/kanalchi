@@ -25,7 +25,8 @@ export function Histogram({
   if (data.length < 2) return null;
 
   const max = Math.max(...data.map((d) => d.count));
-  const colour = tone ? toneVar(tone) : "var(--primary)";
+  // Tag pages tint by the tag's tier; everywhere else this is one of the charts and wears the chart hue.
+  const colour = tone ? toneVar(tone) : "var(--chart-1)";
   const active = hover !== null ? data[hover] : null;
 
   return (

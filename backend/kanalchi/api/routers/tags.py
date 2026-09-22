@@ -320,13 +320,164 @@ async def stats(tenant: Tenant = Depends(require_tenant), db: AsyncSession = Dep
             .limit(20)
         )
     ).all()
+    # Everything clock-shaped is computed in the channel's own timezone: a post
+    # at 02:00 UTC is a 7 a.m. post in Tashkent, and that is the fact a reader wants.
+    tz = (tenant.settings or {}).get("timezone") or "Asia/Tashkent"
+    scope = "tenant_id = :tenant_id AND is_deleted = false AND is_album_root = true"
+    params = {"tenant_id": tenant.id, "tz": tz}
+
+    async def rows(sql: str):
+        return (await db.execute(text(sql), params)).all()
+
+    by_weekday = await rows(
+        f"""SELECT extract(isodow FROM (date AT TIME ZONE :tz))::int AS dow,
+                   count(*) AS posts, coalesce(avg(views), 0)::int AS mean_views
+            FROM posts WHERE {scope} GROUP BY 1 ORDER BY 1"""
+    )
+    by_hour = await rows(
+        f"""SELECT extract(hour FROM (date AT TIME ZONE :tz))::int AS hour,
+                   count(*) AS posts, coalesce(avg(views), 0)::int AS mean_views
+            FROM posts WHERE {scope} GROUP BY 1 ORDER BY 1"""
+    )
+    by_day = await rows(
+        f"""SELECT to_char((date AT TIME ZONE :tz)::date, 'YYYY-MM-DD') AS day, count(*) AS posts
+            FROM posts WHERE {scope} GROUP BY 1 ORDER BY 1"""
+    )
+    by_year = await rows(
+        f"""SELECT extract(year FROM (date AT TIME ZONE :tz))::int AS year, count(*) AS posts,
+                   coalesce(avg(views), 0)::int AS mean_views, coalesce(sum(views), 0)::bigint AS total_views
+            FROM posts WHERE {scope} GROUP BY 1 ORDER BY 1"""
+    )
+    media_mix = await rows(
+        f"""SELECT coalesce(media_kind, 'none') AS kind, count(*) AS posts
+            FROM posts WHERE {scope} GROUP BY 1 ORDER BY 2 DESC"""
+    )
+    length_buckets = await rows(
+        f"""SELECT CASE
+                     WHEN length(coalesce(text, '')) < 200 THEN 'short'
+                     WHEN length(coalesce(text, '')) < 800 THEN 'medium'
+                     WHEN length(coalesce(text, '')) < 2000 THEN 'long'
+                     ELSE 'essay' END AS bucket,
+                   count(*) AS posts, coalesce(avg(views), 0)::int AS mean_views
+            FROM posts WHERE {scope} GROUP BY 1"""
+    )
+    extra = (
+        await db.execute(
+            select(
+                func.coalesce(func.sum(Post.forwards), 0),
+                func.coalesce(func.sum(Post.reactions_total), 0),
+                func.coalesce(func.avg(func.length(Post.text)), 0),
+            ).where(Post.tenant_id == tenant.id, Post.is_deleted.is_(False), Post.is_album_root.is_(True))
+        )
+    ).first()
+    by_language = await rows(
+        f"""SELECT language, count(*) AS posts FROM posts
+            WHERE {scope} AND language IS NOT NULL GROUP BY 1 ORDER BY 2 DESC"""
+    )
+
+    # The longest run of consecutive posting days, straight from the daily counts.
+    longest_streak = streak = 0
+    previous = None
+    for day, _ in by_day:
+        current = datetime.strptime(day, "%Y-%m-%d").date()
+        streak = streak + 1 if previous and (current - previous).days == 1 else 1
+        longest_streak = max(longest_streak, streak)
+        previous = current
+    busiest = max(by_day, key=lambda r: r[1]) if by_day else None
+
+    # --- Numbers that only exist once the archive has been read -----------
+    # A follower-count service can tell you how often a channel posts. It cannot
+    # tell you who the channel keeps naming, or what it quietly stopped covering.
+    indexed_posts = await db.scalar(
+        select(func.count())
+        .select_from(Post)
+        .where(Post.tenant_id == tenant.id, Post.index_status.in_(["tagged", "extracted"]))
+    )
+
+    by_weekday_hour = await rows(
+        f"""SELECT extract(isodow FROM (date AT TIME ZONE :tz))::int AS dow,
+                   extract(hour FROM (date AT TIME ZONE :tz))::int AS hour,
+                   count(*) AS posts
+            FROM posts WHERE {scope} GROUP BY 1, 2"""
+    )
+    by_domain = await rows(
+        """SELECT domain, count(*) AS links, count(DISTINCT post_id) AS posts
+           FROM post_links WHERE tenant_id = :tenant_id AND domain IS NOT NULL
+           GROUP BY 1 ORDER BY 2 DESC LIMIT 12"""
+    )
+
+    async def top_of(dimension: str, limit: int = 10):
+        return (
+            await db.execute(
+                select(Tag.slug, Tag.canonical_name, Tag.labels, Tag.post_count)
+                .join(Dimension, Dimension.id == Tag.dimension_id)
+                .where(
+                    Tag.tenant_id == tenant.id,
+                    Tag.status == "active",
+                    Tag.post_count > 0,
+                    Dimension.key == dimension,
+                )
+                .order_by(Tag.post_count.desc())
+                .limit(limit)
+            )
+        ).all()
+
+    def tag_rows(raw):
+        return [{"slug": sl, "name": n, "labels": lb or {}, "posts": c} for sl, n, lb, c in raw]
+
+    themes_over_time = await rows(
+        """SELECT to_char(date_trunc('quarter', p.date), 'YYYY-"Q"Q') AS quarter,
+                  t.slug, t.canonical_name, t.labels, count(*) AS posts
+           FROM post_tags pt
+           JOIN posts p ON p.id = pt.post_id AND p.is_deleted = false AND p.is_album_root = true
+           JOIN tags t ON t.id = pt.tag_id AND t.status = 'active'
+           JOIN dimensions d ON d.id = t.dimension_id AND d.key = 'themes'
+           WHERE pt.tenant_id = :tenant_id
+             AND t.id IN (
+               SELECT tg.id FROM tags tg JOIN dimensions dd ON dd.id = tg.dimension_id
+               WHERE tg.tenant_id = :tenant_id AND dd.key = 'themes' AND tg.status = 'active'
+               ORDER BY tg.post_count DESC LIMIT 6)
+           GROUP BY 1, 2, 3, 4 ORDER BY 1"""
+    )
+
+    order = {"short": 0, "medium": 1, "long": 2, "essay": 3}
     return {
         "posts": totals[0] if totals else 0,
         "total_views": int(totals[1] or 0) if totals else 0,
         "mean_views": int(totals[2] or 0) if totals else 0,
+        "total_forwards": int(extra[0] or 0) if extra else 0,
+        "total_reactions": int(extra[1] or 0) if extra else 0,
+        "mean_length": int(extra[2] or 0) if extra else 0,
         "first_post_at": totals[3] if totals else None,
         "last_post_at": totals[4] if totals else None,
+        "timezone": tz,
         "by_month": [{"month": b, "posts": p, "mean_views": v} for b, p, v in by_month],
+        "by_weekday": [{"dow": d, "posts": p, "mean_views": v} for d, p, v in by_weekday],
+        "by_hour": [{"hour": h, "posts": p, "mean_views": v} for h, p, v in by_hour],
+        "by_day": [{"day": d, "posts": p} for d, p in by_day],
+        "by_year": [
+            {"year": y, "posts": p, "mean_views": v, "total_views": int(t)} for y, p, v, t in by_year
+        ],
+        "media_mix": [{"kind": k, "posts": p} for k, p in media_mix],
+        "by_length": sorted(
+            ({"bucket": b, "posts": p, "mean_views": v} for b, p, v in length_buckets),
+            key=lambda r: order[r["bucket"]],
+        ),
+        "by_language": [{"language": lang, "posts": p} for lang, p in by_language],
+        "by_weekday_hour": [{"dow": d, "hour": h, "posts": p} for d, h, p in by_weekday_hour],
+        "by_domain": [{"domain": d, "links": lk, "posts": p} for d, lk, p in by_domain],
+        "indexed_posts": indexed_posts or 0,
+        "top_themes": tag_rows(await top_of("themes")),
+        "top_people": tag_rows(await top_of("people")),
+        "top_gov_orgs": tag_rows(await top_of("gov_orgs")),
+        "by_format": tag_rows(await top_of("format", 8)),
+        "by_stance": tag_rows(await top_of("stance", 6)),
+        "themes_over_time": [
+            {"quarter": q, "slug": sl, "name": n, "labels": lb or {}, "posts": c}
+            for q, sl, n, lb, c in themes_over_time
+        ],
+        "longest_streak_days": longest_streak,
+        "busiest_day": {"day": busiest[0], "posts": busiest[1]} if busiest else None,
         "top_tags": [tag_out(t, key) for t, key in top_tags],
     }
 

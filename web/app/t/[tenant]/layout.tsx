@@ -26,6 +26,7 @@ export default async function TenantLayout({ children }: { children: React.React
           { href: "/search", label: nav("search") },
           { href: "/stories", label: nav("stories") },
           { href: "/top", label: nav("top") },
+          { href: "/stats", label: nav("stats") },
           { href: "/chat", label: nav("chat") },
         ]}
         studio={isMember ? { href: "/studio", label: nav("studio") } : null}
@@ -40,9 +41,6 @@ export default async function TenantLayout({ children }: { children: React.React
               t.me/{tenant.username}
             </a>
           ) : null}
-          <Link href="/stats" className="link-quiet">
-            {nav("stats")}
-          </Link>
           <Link href="/feed.xml" className="link-quiet">
             RSS
           </Link>

@@ -182,13 +182,37 @@ export type SearchResult = {
   facets?: Record<string, { slug: string; name: string; labels: Record<string, string>; count: number }[]>;
 };
 
+export type StatTag = { slug: string; name: string; labels: Record<string, string>; posts: number };
+
 export type ChannelStats = {
   posts: number;
   total_views: number;
   mean_views: number;
+  total_forwards: number;
+  total_reactions: number;
+  mean_length: number;
   first_post_at: string | null;
   last_post_at: string | null;
+  timezone: string;
   by_month: { month: string; posts: number; mean_views: number }[];
+  by_weekday: { dow: number; posts: number; mean_views: number }[];
+  by_hour: { hour: number; posts: number; mean_views: number }[];
+  by_day: { day: string; posts: number }[];
+  by_year: { year: number; posts: number; mean_views: number; total_views: number }[];
+  media_mix: { kind: string; posts: number }[];
+  by_length: { bucket: "short" | "medium" | "long" | "essay"; posts: number; mean_views: number }[];
+  by_language: { language: string; posts: number }[];
+  by_weekday_hour: { dow: number; hour: number; posts: number }[];
+  by_domain: { domain: string; links: number; posts: number }[];
+  indexed_posts: number;
+  top_themes: StatTag[];
+  top_people: StatTag[];
+  top_gov_orgs: StatTag[];
+  by_format: StatTag[];
+  by_stance: StatTag[];
+  themes_over_time: { quarter: string; slug: string; name: string; labels: Record<string, string>; posts: number }[];
+  longest_streak_days: number;
+  busiest_day: { day: string; posts: number } | null;
   top_tags: TagOut[];
 };
 
