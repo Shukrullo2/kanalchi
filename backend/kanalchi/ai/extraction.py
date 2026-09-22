@@ -7,6 +7,7 @@ crash can never lose track of a submitted batch. Results arrive unordered and ar
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import UTC, datetime
 from typing import Any
@@ -29,6 +30,8 @@ from kanalchi.core.settings import get_settings
 log = get_logger(__name__)
 
 BATCH_SIZE = 5000
+# Post-processing one result touches shared tag rows, so this stays modest.
+INGEST_CONCURRENCY = 6
 # What a post costs to write out when nothing has been measured yet: this
 # schema plus adaptive thinking runs near 1,100 tokens on real Uzbek posts.
 DEFAULT_OUTPUT_TOKENS = 1100
@@ -395,13 +398,40 @@ async def ingest_results(llm_batch_id: int) -> dict[str, Any]:
                 marks.append((post_id, version, "queued", f"{kind}: retrying", True))
                 retry += 1
 
-    # The stream is closed; now the slow part.
+    # The stream is closed; now the slow part. Each post costs about a second —
+    # tag upserts plus an embedding call for its unmatched candidates — so five
+    # thousand of them serially is well over an hour with nothing to watch.
+    # Bounded concurrency, and progress recorded so a long ingest is observable.
     ok = 0
     parsed_posts: list[int] = []
-    for post_id, version, data, usage in succeeded:
-        await _store(post_id, data, usage, model, version)
-        parsed_posts.append(post_id)
-        ok += 1
+    gate = asyncio.Semaphore(INGEST_CONCURRENCY)
+    done = 0
+    total = len(succeeded)
+
+    async def store_one(post_id: int, version: int, data: dict[str, Any], usage: Usage) -> int | None:
+        nonlocal done
+        async with gate:
+            try:
+                await _store(post_id, data, usage, model, version)
+            except Exception as exc:  # noqa: BLE001
+                # Concurrent upserts onto the same tag can deadlock; one retry
+                # settles it, and a post that still fails must not sink the batch.
+                log.warning("ingest.store_retry", post_id=post_id, error=str(exc)[:200])
+                try:
+                    await asyncio.sleep(0.5)
+                    await _store(post_id, data, usage, model, version)
+                except Exception as exc2:  # noqa: BLE001
+                    log.warning("ingest.store_failed", post_id=post_id, error=str(exc2)[:200])
+                    return None
+            done += 1
+            if done % 250 == 0:
+                log.info("ingest.progress", batch=llm_batch_id, done=done, total=total)
+            return post_id
+
+    stored = await asyncio.gather(*(store_one(*row) for row in succeeded))
+    parsed_posts = [pid for pid in stored if pid is not None]
+    ok = len(parsed_posts)
+
     for post_id, version, status, error, bump in marks:
         await _mark(post_id, status, error=error, bump_attempt=bump, version=version)
 
