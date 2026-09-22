@@ -436,3 +436,30 @@ def rotate_keys() -> None:
 
 if __name__ == "__main__":
     app()
+
+
+@app.command("build-threads")
+def build_threads_cmd(tenant_id: int, dry_run: bool = False) -> None:
+    """Find the channel's running stories and have Claude name and summarise them.
+
+    The grouping itself is free — posts close in embedding space and close in time
+    are almost always the same story, which a neighbour graph finds without a
+    model. Only the naming costs anything, one call per story, so `--dry-run`
+    shows what was found and spends nothing.
+
+    This exists because the only other way in is a Monday cron, which means a new
+    channel shows an empty stories tab for up to a week and nobody can tell
+    whether it is broken or merely waiting.
+    """
+    import asyncio
+    import json as _json
+
+    from kanalchi.ai.threads import build_threads, find_threads
+
+    async def _run() -> dict:
+        if dry_run:
+            groups = await find_threads(tenant_id)
+            return {"groups": len(groups), "sizes": [len(g) for g in groups]}
+        return await build_threads(tenant_id)
+
+    typer.echo(_json.dumps(asyncio.run(_run()), indent=2))

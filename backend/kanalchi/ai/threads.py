@@ -163,15 +163,35 @@ async def build_threads(tenant_id: int, job_run_id: int | None = None) -> dict[s
 
     cost = 0.0
     built = 0
+    kept = 0
+
+    # What is already on disk, keyed by the exact set of posts it covers. A run
+    # of this costs one model call per story and can take longer than the thing
+    # running it, so it resumes rather than starting over: the groups come from
+    # a deterministic graph, so a thread whose posts still match a current group
+    # is still correct and is left alone. Stale ones are cleared at the end,
+    # once their replacements exist.
     async with session_scope() as db:
-        await db.execute(
-            delete(ThreadPost).where(
-                ThreadPost.thread_id.in_(select(Thread.id).where(Thread.tenant_id == tenant_id))
+        existing_rows = (
+            await db.execute(
+                select(ThreadPost.thread_id, ThreadPost.post_id)
+                .join(Thread, Thread.id == ThreadPost.thread_id)
+                .where(Thread.tenant_id == tenant_id)
             )
-        )
-        await db.execute(delete(Thread).where(Thread.tenant_id == tenant_id))
+        ).all()
+    covered: dict[int, set[int]] = {}
+    for thread_id, post_id in existing_rows:
+        covered.setdefault(thread_id, set()).add(post_id)
+    by_posts = {frozenset(posts): thread_id for thread_id, posts in covered.items()}
+    fresh: set[int] = set()
 
     for index, post_ids in enumerate(groups):
+        already = by_posts.get(frozenset(post_ids))
+        if already is not None:
+            fresh.add(already)
+            kept += 1
+            continue
+
         async with session_scope() as db:
             posts = (await db.scalars(select(Post).where(Post.id.in_(post_ids)).order_by(Post.date))).all()
         if len(posts) < MIN_THREAD_POSTS:
@@ -209,11 +229,30 @@ async def build_threads(tenant_id: int, job_run_id: int | None = None) -> dict[s
             await db.flush()
             for p in posts:
                 db.add(ThreadPost(thread_id=thread.id, post_id=p.id))
+            fresh.add(thread.id)
         built += 1
-        await update_job_run(job_run_id, progress={"stage": "threads", "done": built, "total": len(groups)})
+        await update_job_run(
+            job_run_id,
+            progress={"stage": "threads", "done": built + kept, "total": len(groups)},
+        )
 
-    log.info("threads.built", tenant_id=tenant_id, threads=built, cost=round(cost, 4))
-    return {"threads": built, "cost_usd": cost}
+    # Only now drop what no longer matches any group, so an interrupted run
+    # leaves the old stories standing rather than an empty tab.
+    stale = [thread_id for thread_id in covered if thread_id not in fresh]
+    if stale:
+        async with session_scope() as db:
+            await db.execute(delete(ThreadPost).where(ThreadPost.thread_id.in_(stale)))
+            await db.execute(delete(Thread).where(Thread.id.in_(stale)))
+
+    log.info(
+        "threads.built",
+        tenant_id=tenant_id,
+        threads=built,
+        kept=kept,
+        dropped=len(stale),
+        cost=round(cost, 4),
+    )
+    return {"threads": built + kept, "built": built, "kept": kept, "cost_usd": cost}
 
 
 async def stale_summary_tag_ids(tenant_id: int, limit: int = 25) -> list[int]:
