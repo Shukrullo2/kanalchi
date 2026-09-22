@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     voyage_api_key: str | None = None
     chat_model: str = "claude-opus-5"
     extract_model: str = "claude-sonnet-5"
+    # Consolidating candidate names into tags is list work, and unlike extraction its
+    # output is reviewable: one proposal, a diff, applied by a human. Sonnet is a
+    # reasonable default; set it to claude-opus-5 for a channel worth the extra.
+    taxonomy_model: str = "claude-sonnet-5"
     embed_model: str = "voyage-4"
     embed_dim: int = 1024
     # Voyage throttles hard until the account has a payment method (3 requests and

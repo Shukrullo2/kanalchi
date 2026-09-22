@@ -36,6 +36,7 @@ from kanalchi.core.models import (
     TaxonomyVersion,
     Tenant,
 )
+from kanalchi.core.settings import get_settings
 from kanalchi.text.normalize import normalize
 from kanalchi.text.slug import slugify
 
@@ -296,6 +297,7 @@ async def build(tenant_id: int, job_run_id: int | None = None) -> dict[str, Any]
                 system=system_blocks(prompts.TAXONOMY_SYSTEM),
                 user=prompts.taxonomy_user(dim_key, description, chunk, existing, proposed_names, profile),
                 schema=schema_of(TaxonomyProposal),
+                model=get_settings().taxonomy_model,
                 effort="high",
                 max_tokens=32000,
             )
