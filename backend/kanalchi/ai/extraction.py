@@ -13,6 +13,7 @@ from typing import Any
 
 from anthropic.types.message_create_params import MessageCreateParamsNonStreaming
 from anthropic.types.messages.batch_create_params import Request
+from pydantic import ConfigDict
 from sqlalchemy import Float, cast, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 
@@ -47,6 +48,35 @@ def parse_custom_id(cid: str) -> int | None:
         return int(cid.rsplit("-", 1)[1])
     except (IndexError, ValueError):
         return None
+
+
+def parse_custom_id_version(cid: str) -> int:
+    """The extractor version a batch was submitted under, read back off its custom_id.
+
+    A batch can outlive the schema that produced it — results stay retrievable for
+    weeks, and a bump between submitting and ingesting must not strand them.
+    """
+    try:
+        return int(cid.split("-")[1])
+    except (IndexError, ValueError):
+        return EXTRACTOR_VERSION
+
+
+class _Lenient(PostExtraction):
+    """The current schema, tolerating fields an older version asked for.
+
+    Everything v2 removed was unread, so dropping those keys on the way in loses
+    nothing — and it means a version bump never strands a batch already paid for.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+
+def validate_result(text: str, version: int):
+    """Strict for the current version, forgiving of extra keys from an older one."""
+    if version == EXTRACTOR_VERSION:
+        return PostExtraction.model_validate_json(text).model_dump()
+    return _Lenient.model_validate_json(text).model_dump()
 
 
 async def _taxonomy_digest(db, tenant_id: int) -> str:
@@ -309,21 +339,30 @@ async def poll_batches() -> list[int]:
 
 
 async def ingest_results(llm_batch_id: int) -> dict[str, Any]:
-    """Stream batch results, validate, persist, and queue follow-up work."""
+    """Stream batch results, validate, persist, and queue follow-up work.
+
+    The result stream is drained fully before any database work begins. Writing
+    per result while the stream is open means holding an HTTP response across
+    thousands of transactions, and it dies part-way through — silently, with the
+    job still marked as running. Parsed results for one batch are a few megabytes,
+    which is a cheap price for an ingest that finishes.
+    """
     async with session_scope() as db:
         row = await db.get(LlmBatch, llm_batch_id)
         if row is None or row.ingested_at is not None:
             return {"skipped": True}
         batch_id, tenant_id, model = row.anthropic_batch_id, row.tenant_id, row.model
 
-    ok = refused = invalid = retry = 0
+    succeeded: list[tuple[int, int, dict[str, Any], Usage]] = []
+    marks: list[tuple[int, int, str, str | None, bool]] = []
     total_usage = Usage()
-    parsed_posts: list[int] = []
+    refused = invalid = retry = 0
 
     async for result in await get_client().messages.batches.results(batch_id):
         post_id = parse_custom_id(result.custom_id)
         if post_id is None:
             continue
+        version = parse_custom_id_version(result.custom_id)
         kind = result.result.type
         if kind == "succeeded":
             message = result.result.message
@@ -335,28 +374,36 @@ async def ingest_results(llm_batch_id: int) -> dict[str, Any]:
                 cache_read_tokens=total_usage.cache_read_tokens + usage.cache_read_tokens,
             )
             if message.stop_reason == "refusal":
-                await _mark(post_id, "refused", error="model declined this post")
+                marks.append((post_id, version, "refused", "model declined this post", False))
                 refused += 1
                 continue
             text = next((b.text for b in message.content if b.type == "text"), "")
             try:
-                data = PostExtraction.model_validate_json(text).model_dump()
+                data = validate_result(text, version)
             except Exception as exc:  # noqa: BLE001
-                await _mark(post_id, "invalid", error=str(exc)[:500])
+                marks.append((post_id, version, "invalid", str(exc)[:500], False))
                 invalid += 1
                 continue
-            await _store(post_id, data, usage, model)
-            parsed_posts.append(post_id)
-            ok += 1
+            succeeded.append((post_id, version, data, usage))
         elif kind in {"errored", "expired", "canceled"}:
             err = getattr(result.result, "error", None)
             err_type = getattr(err, "type", kind)
             if err_type == "invalid_request":
-                await _mark(post_id, "invalid", error=str(err)[:500])
+                marks.append((post_id, version, "invalid", str(err)[:500], False))
                 invalid += 1
             else:
-                await _mark(post_id, "queued", error=f"{kind}: retrying", bump_attempt=True)
+                marks.append((post_id, version, "queued", f"{kind}: retrying", True))
                 retry += 1
+
+    # The stream is closed; now the slow part.
+    ok = 0
+    parsed_posts: list[int] = []
+    for post_id, version, data, usage in succeeded:
+        await _store(post_id, data, usage, model, version)
+        parsed_posts.append(post_id)
+        ok += 1
+    for post_id, version, status, error, bump in marks:
+        await _mark(post_id, status, error=error, bump_attempt=bump, version=version)
 
     usd = await record_usage(tenant_id, model, "extract", total_usage, batch=True, requests=ok)
     async with session_scope() as db:
@@ -382,12 +429,18 @@ async def ingest_results(llm_batch_id: int) -> dict[str, Any]:
     }
 
 
-async def _mark(post_id: int, status: str, *, error: str | None = None, bump_attempt: bool = False) -> None:
+async def _mark(
+    post_id: int,
+    status: str,
+    *,
+    error: str | None = None,
+    bump_attempt: bool = False,
+    version: int | None = None,
+) -> None:
+    version = EXTRACTOR_VERSION if version is None else version
     async with session_scope() as db:
         ext = await db.scalar(
-            select(Extraction).where(
-                Extraction.post_id == post_id, Extraction.extractor_version == EXTRACTOR_VERSION
-            )
+            select(Extraction).where(Extraction.post_id == post_id, Extraction.extractor_version == version)
         )
         if ext is None:
             return
@@ -399,14 +452,15 @@ async def _mark(post_id: int, status: str, *, error: str | None = None, bump_att
                 ext.status = "errored"
 
 
-async def _store(post_id: int, data: dict[str, Any], usage: Usage, model: str) -> None:
+async def _store(
+    post_id: int, data: dict[str, Any], usage: Usage, model: str, version: int | None = None
+) -> None:
     from kanalchi.ai.postprocess import apply_extraction
 
+    version = EXTRACTOR_VERSION if version is None else version
     async with session_scope() as db:
         ext = await db.scalar(
-            select(Extraction).where(
-                Extraction.post_id == post_id, Extraction.extractor_version == EXTRACTOR_VERSION
-            )
+            select(Extraction).where(Extraction.post_id == post_id, Extraction.extractor_version == version)
         )
         if ext is None:
             return
@@ -422,7 +476,7 @@ async def _store(post_id: int, data: dict[str, Any], usage: Usage, model: str) -
                 title=(data.get("title") or None),
                 summary=(data.get("summary") or None),
                 language=data.get("language_primary"),
-                extraction_version=EXTRACTOR_VERSION,
+                extraction_version=version,
                 index_status="extracted",
             )
         )
