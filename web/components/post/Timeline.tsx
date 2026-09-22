@@ -2,15 +2,10 @@
 
 import { useLocale } from "next-intl";
 import { useState } from "react";
-import { monthKey, monthTitle } from "@/lib/format";
 import type { PostOut, PostPage } from "@/lib/types";
 import { PostEntry } from "./PostEntry";
 
-/**
- * The register. Entries run in date order under a marker for the month they
- * belong to; the marker sticks while its own month scrolls past, so you always
- * know where in the archive you are.
- */
+/** The archive as a grid of cards, with a button to pull the next page in. */
 export function Timeline({ initial, loadMoreLabel }: { initial: PostPage; loadMoreLabel: string }) {
   const locale = useLocale();
   const [items, setItems] = useState<PostOut[]>(initial.items);
@@ -30,37 +25,21 @@ export function Timeline({ initial, loadMoreLabel }: { initial: PostPage; loadMo
     }
   }
 
-  const runs = groupByMonth(items);
-
   return (
     <div>
-      {runs.map((run) => (
-        <section key={run.key} className="register">
-          <h2 className="month-mark">
-            <span suppressHydrationWarning>{monthTitle(run.items[0].date, locale)}</span>
-          </h2>
-          {run.items.map((post) => (
-            <PostEntry key={post.id} post={post} locale={locale} />
-          ))}
-        </section>
-      ))}
+      <div className="archive-grid">
+        {items.map((post) => (
+          <PostEntry key={post.id} post={post} locale={locale} />
+        ))}
+      </div>
 
       {cursor ? (
-        <button onClick={more} disabled={busy} className="btn-ghost mt-6 w-full justify-center">
-          {busy ? "…" : loadMoreLabel}
-        </button>
+        <div className="mt-8 flex justify-center">
+          <button onClick={more} disabled={busy} className="btn-ghost px-8">
+            {busy ? "…" : loadMoreLabel}
+          </button>
+        </div>
       ) : null}
     </div>
   );
-}
-
-function groupByMonth(items: PostOut[]): { key: string; items: PostOut[] }[] {
-  const runs: { key: string; items: PostOut[] }[] = [];
-  for (const post of items) {
-    const key = monthKey(post.date);
-    const last = runs[runs.length - 1];
-    if (last && last.key === key) last.items.push(post);
-    else runs.push({ key, items: [post] });
-  }
-  return runs;
 }

@@ -104,7 +104,7 @@ export function SearchView({
           {initial.items.length === 0 ? (
             <div className="py-16 text-center text-sm text-muted-foreground">{labels.nothing}</div>
           ) : (
-            <div className="register border-t">
+            <div className="archive-grid">
               {initial.items.map((p) => (
                 <PostCard key={p.id} post={p} locale={locale} />
               ))}

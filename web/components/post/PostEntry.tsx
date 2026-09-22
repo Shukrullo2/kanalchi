@@ -4,15 +4,14 @@ import { TagRef } from "@/components/tags/TagChip";
 import { byTier, tierOf } from "@/lib/dimensions";
 import { compactNumber, fullDate, postDate } from "@/lib/format";
 import type { PostOut } from "@/lib/types";
-import { MediaGallery } from "./MediaGallery";
 
 /**
- * One entry in the register: the date in the margin, the post beside it.
+ * One post in the archive grid.
  *
- * The margin is the point of the whole layout — in an archive of twenty thousand
- * messages, when a thing was said is half of what you are looking for, so the
- * dates line up in a column you can run your eye down instead of being buried in
- * a metadata strip under each post.
+ * Most posts here are text, so the card leads with the opening line set large
+ * and bold — that is what someone scans — and carries the rest as a snippet
+ * underneath. Posts that have a picture show it, which gives a wall of cards
+ * something to break the rhythm.
  */
 export function PostEntry({
   post,
@@ -21,93 +20,84 @@ export function PostEntry({
 }: {
   post: PostOut;
   locale: string;
-  /** Position in a ranked list. It goes in the margin, where ordinals belong. */
+  /** Position in a ranked list, shown as a badge on the card. */
   rank?: number;
 }) {
-  const body = post.html ?? post.text;
-  // Only the tags a reader scans by. Language, media kind and post format are
-  // filing details; they belong on the post's own page, not in the timeline.
-  const subjects = byTier(post.tags ?? []).filter((t) => tierOf(t.dimension) !== "meta").slice(0, 5);
+  const plain = stripTags(post.html ?? post.text);
+  const { lead, rest } = split(plain);
+  const thumb = post.media.find((m) => m.thumb_url || m.url);
+  // Only the tags a reader scans by; language and media kind are filing details.
+  const subjects = byTier(post.tags ?? [])
+    .filter((t) => tierOf(t.dimension) !== "meta")
+    .slice(0, 3);
 
   return (
-    <article className="entry">
-      <div className="entry-margin">
-        {rank ? <span className="entry-rank tnum">{rank}</span> : null}
-        <Link
-          href={`/post/${post.id}`}
-          className="entry-day hover:underline"
-          title={fullDate(post.date, locale)}
-        >
-          <time dateTime={post.date} suppressHydrationWarning>
-            {postDate(post.date, locale)}
-          </time>
-        </Link>
-        {post.views > 0 ? (
-          <span className="flex items-center gap-1 whitespace-nowrap">
-            <EyeIcon size={12} />
-            {compactNumber(post.views)}
-          </span>
-        ) : null}
-      </div>
-
-      <div className="entry-body">
-        {post.forward_from ? (
-          <p className="mb-2 text-xs text-muted-foreground">
-            forwarded from {post.forward_from.title ?? post.forward_from.username ?? "a channel"}
-          </p>
-        ) : null}
-
-        {post.media.length > 0 ? (
-          <div className="mb-3">
-            <MediaGallery media={post.media} />
-          </div>
-        ) : null}
-
-        {body ? (
-          <div className="tg-body whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: body }} />
-        ) : null}
-
-        {post.truncated ? (
-          <Link href={`/post/${post.id}`} className="mt-1 inline-block text-sm text-primary hover:underline">
-            Read the rest
+    <article className="card-link">
+      <div className="card h-full">
+        {thumb ? (
+          <Link href={`/post/${post.id}`} className="card-media block">
+            {/* eslint-disable-next-line @next/next/no-img-element -- served from MinIO on this domain */}
+            <img src={thumb.thumb_url ?? thumb.url ?? ""} alt="" loading="lazy" />
+            {rank ? <span className="card-rank">{rank}</span> : null}
           </Link>
         ) : null}
 
-        {post.poll ? <Poll poll={post.poll} /> : null}
+        <div className="card-body">
+          {!thumb && rank ? <span className="card-rank-inline">{rank}</span> : null}
 
-        {subjects.length > 0 ? (
-          <div className="mt-3 flex flex-wrap items-center gap-x-3.5 gap-y-1.5">
-            {subjects.map((tag) => (
-              <TagRef key={tag.slug} tag={tag} locale={locale} />
-            ))}
+          <Link href={`/post/${post.id}`} className="card-lead hover:underline">
+            {lead || "…"}
+          </Link>
+          {rest ? <p className="card-snippet">{rest}</p> : null}
+
+          {subjects.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              {subjects.map((tag) => (
+                <TagRef key={tag.slug} tag={tag} locale={locale} />
+              ))}
+            </div>
+          ) : null}
+
+          <div className="card-foot">
+            <time dateTime={post.date} title={fullDate(post.date, locale)} suppressHydrationWarning>
+              {postDate(post.date, locale)}
+            </time>
+            {post.views > 0 ? (
+              <span className="flex items-center gap-1.5">
+                <EyeIcon size={13} />
+                {compactNumber(post.views)}
+              </span>
+            ) : null}
+            {post.media.length > 1 ? <span>{post.media.length} files</span> : null}
+            {post.poll ? <span>Poll</span> : null}
           </div>
-        ) : null}
+        </div>
       </div>
     </article>
   );
 }
 
-function Poll({ poll }: { poll: NonNullable<PostOut["poll"]> }) {
-  const total = poll.total_voters || 0;
-  return (
-    <div className="mt-3 max-w-md">
-      <div className="text-sm font-medium">{poll.question}</div>
-      <ul className="mt-2 space-y-1.5">
-        {poll.answers.map((a, i) => {
-          const share = total ? Math.round(((a.voters ?? 0) / total) * 100) : 0;
-          return (
-            <li key={i} className="text-sm">
-              <div className="flex justify-between gap-4">
-                <span>{a.text}</span>
-                <span className="tnum text-muted-foreground">{share}%</span>
-              </div>
-              <div className="mt-1 h-[3px] overflow-hidden rounded-full bg-border">
-                <div className="h-full rounded-full bg-primary" style={{ width: `${share}%` }} />
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
+function stripTags(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;/g, "'")
+    .trim();
+}
+
+/** First line as the headline, the remainder as the snippet. */
+function split(text: string): { lead: string; rest: string } {
+  const trimmed = text.replace(/\n{2,}/g, "\n").trim();
+  if (!trimmed) return { lead: "", rest: "" };
+  const breakAt = trimmed.search(/\n|(?<=[.!?…])\s/u);
+  if (breakAt === -1 || breakAt > 140) {
+    return { lead: trimmed.slice(0, 140), rest: trimmed.slice(140, 400).trim() };
+  }
+  return { lead: trimmed.slice(0, breakAt).trim(), rest: trimmed.slice(breakAt, breakAt + 400).trim() };
 }

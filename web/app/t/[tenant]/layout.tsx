@@ -31,7 +31,7 @@ export default async function TenantLayout({ children }: { children: React.React
         studio={isMember ? { href: "/studio", label: nav("studio") } : null}
       />
 
-      <main className="shell flex-1 py-7 sm:py-10">{children}</main>
+      <main className="shell flex-1 pb-10 pt-6">{children}</main>
 
       <footer className="mt-12 border-t">
         <div className="shell flex flex-wrap items-center gap-x-5 gap-y-2 py-6 text-xs text-muted-foreground">

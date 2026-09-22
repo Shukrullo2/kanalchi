@@ -126,7 +126,7 @@ export default async function TagPage({ params }: Props) {
         </section>
       ) : null}
 
-      <div className="register mt-8 border-t">
+      <div className="archive-grid mt-8">
         {results.items.map((p) => (
           <PostCard key={p.id} post={p} locale={locale} />
         ))}

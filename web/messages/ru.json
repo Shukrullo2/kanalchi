@@ -28,7 +28,11 @@
     "indexThemes": "О чём пишет канал",
     "indexEntities": "Кого и что упоминает",
     "indexAll": "Весь указатель",
-    "subscribers": "{count} подписчиков"
+    "subscribers": "{count} подписчиков",
+    "searchPlaceholder": "Поиск по архиву…",
+    "sortNewest": "Сначала новые",
+    "sortTop": "Самые читаемые",
+    "totalPosts": "{count} постов"
   },
   "studio": {
     "title": "Студия",

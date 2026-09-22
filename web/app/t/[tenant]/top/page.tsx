@@ -59,7 +59,7 @@ export default async function TopPage({ searchParams }: Props) {
         </div>
       </div>
 
-      <ol className="register mt-6 border-t">
+      <ol className="archive-grid mt-8">
         {data.items.map((p, i) => (
           <li key={p.id}>
             <PostCard post={p} locale={locale} rank={i + 1} />

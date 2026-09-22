@@ -2,22 +2,19 @@ import type { Metadata } from "next";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale } from "next-intl/server";
 import { cookies } from "next/headers";
-import { Golos_Text, JetBrains_Mono, Spectral } from "next/font/google";
+import { Manrope, Unbounded } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 
-/* Golos Text was cut for Russian-language public-service typography — ministries, decrees,
-   notices — which is the register this content actually lives in. Spectral carries the post
-   bodies because Telegram marks italics and it has real ones, in Cyrillic as well as Latin. */
-const sans = Golos_Text({ subsets: ["latin", "cyrillic"], variable: "--font-sans", display: "swap" });
-const serif = Spectral({
+/* Unbounded for display and Manrope for everything else — both carry Cyrillic, so an
+   Uzbek Cyrillic headline is set in the same voice as a Latin one. */
+const display = Unbounded({
   subsets: ["latin", "cyrillic"],
-  weight: ["400", "500", "600"],
-  style: ["normal", "italic"],
-  variable: "--font-serif",
+  weight: ["600", "700", "800"],
+  variable: "--font-display",
   display: "swap",
 });
-const mono = JetBrains_Mono({ subsets: ["latin", "cyrillic"], variable: "--font-mono", display: "swap" });
+const sans = Manrope({ subsets: ["latin", "cyrillic"], variable: "--font-sans", display: "swap" });
 
 export const metadata: Metadata = {
   title: { default: "Kanalchi", template: "%s · Kanalchi" },
@@ -32,7 +29,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html
       lang={locale}
       suppressHydrationWarning
-      className={cn(sans.variable, serif.variable, mono.variable, theme === "dark" && "dark", theme === "light" && "light")}
+      className={cn(sans.variable, display.variable, theme !== "light" && "dark", theme === "light" && "light")}
     >
       <body className="min-h-screen font-sans antialiased">
         <NextIntlClientProvider>{children}</NextIntlClientProvider>

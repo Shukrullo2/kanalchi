@@ -47,7 +47,10 @@ export function byTier<T extends { dimension?: string | null }>(tags: T[]): T[] 
   return [...tags].sort((a, b) => order[tierOf(a.dimension)] - order[tierOf(b.dimension)]);
 }
 
-/** The CSS custom property a dimension paints with, for inline styles. */
+/** The colour a dimension paints with, for inline styles: gold for subjects, sky for names. */
 export function toneVar(dimension?: string | null): string {
-  return `var(--tone-${tierOf(dimension)})`;
+  const tier = tierOf(dimension);
+  if (tier === "theme") return "var(--primary)";
+  if (tier === "entity") return "var(--accent)";
+  return "var(--muted-foreground)";
 }

@@ -28,7 +28,11 @@
     "indexThemes": "Kanal nima haqida yozadi",
     "indexEntities": "Kimni va nimani tilga oladi",
     "indexAll": "To‘liq ko‘rsatkich",
-    "subscribers": "{count} obunachi"
+    "subscribers": "{count} obunachi",
+    "searchPlaceholder": "Arxivdan qidirish…",
+    "sortNewest": "Avval yangilari",
+    "sortTop": "Eng ko‘p o‘qilgan",
+    "totalPosts": "{count} ta post"
   },
   "studio": {
     "title": "Studiya",

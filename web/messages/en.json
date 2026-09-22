@@ -28,7 +28,11 @@
     "indexThemes": "What this channel writes about",
     "indexEntities": "Who and what it names",
     "indexAll": "Browse the full index",
-    "subscribers": "{count} subscribers"
+    "subscribers": "{count} subscribers",
+    "searchPlaceholder": "Search the archive…",
+    "sortNewest": "Newest first",
+    "sortTop": "Most read",
+    "totalPosts": "{count} posts"
   },
   "studio": {
     "title": "Studio",
