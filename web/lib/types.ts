@@ -161,8 +161,9 @@ export type TagOut = {
   post_count: number;
   engagement_score: number;
   parent_id: number | null;
-  /** Borrowed from the most-read post carrying this tag; null when none has media. */
+  /** The subject's own picture when it has one, else a post it appeared in. */
   thumb_url?: string | null;
+  image_source?: "logo" | "logo_light" | "wikidata" | null;
   confidence?: number;
 };
 

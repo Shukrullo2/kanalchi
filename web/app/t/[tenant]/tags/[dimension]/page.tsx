@@ -20,11 +20,12 @@ export async function generateMetadata({ params }: Props) {
 
 export default async function DimensionPage({ params }: Props) {
   const { dimension } = await params;
-  const [dimensions, tags, locale, t] = await Promise.all([
+  const [dimensions, tags, locale, t, tc] = await Promise.all([
     apiFetch<DimensionOut[]>("/api/dimensions"),
     apiFetch<TagOut[]>(`/api/tags?dimension=${encodeURIComponent(dimension)}&limit=500`),
     getLocale(),
     getTranslations("tags"),
+    getTranslations("common"),
   ]);
   const dim = dimensions.find((d) => d.key === dimension);
   if (!dim) notFound();
@@ -45,7 +46,7 @@ export default async function DimensionPage({ params }: Props) {
       ) : (
         <div className="tag-grid mt-5">
           {tags.map((tag) => (
-            <TagCard key={tag.slug} tag={tag} locale={locale} />
+            <TagCard key={tag.slug} tag={tag} locale={locale} countLabel={tc("posts", { count: tag.post_count })} />
           ))}
         </div>
       )}

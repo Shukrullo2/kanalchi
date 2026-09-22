@@ -105,7 +105,15 @@ async def list_tags(
         stmt = stmt.where(Tag.canonical_norm.like(f"%{normalize(q)}%"))
     rows = (await db.execute(stmt.order_by(Tag.post_count.desc()).limit(limit))).all()
     thumbs = await tag_thumbnails(db, tenant.id, [t.id for t, _ in rows])
-    return [{**tag_out(t, key), "thumb_url": thumbs.get(t.id)} for t, key in rows]
+    return [
+        {
+            **tag_out(t, key),
+            # The subject's own picture first; a post it appeared in is the fallback.
+            "thumb_url": (f"/media/{t.image_key}" if t.image_key else thumbs.get(t.id)),
+            "image_source": t.image_source,
+        }
+        for t, key in rows
+    ]
 
 
 async def tag_thumbnails(db: AsyncSession, tenant_id: int, tag_ids: list[int]) -> dict[int, str]:
@@ -511,8 +519,7 @@ async def stats(tenant: Tenant = Depends(require_tenant), db: AsyncSession = Dep
         "by_language": [{"language": lang, "posts": p} for lang, p in by_language],
         "by_weekday_hour": [{"dow": d, "hour": h, "posts": p} for d, h, p in by_weekday_hour],
         "by_domain": [
-            {"domain": d, "links": lk, "posts": p, "telegram": d.startswith("@")}
-            for d, lk, p in by_domain
+            {"domain": d, "links": lk, "posts": p, "telegram": d.startswith("@")} for d, lk, p in by_domain
         ],
         "indexed_posts": indexed_posts or 0,
         "top_themes": tag_rows(await top_of("themes")),

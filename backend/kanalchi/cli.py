@@ -361,6 +361,22 @@ def seed_tags(domain: str = "demo.localhost") -> None:
     asyncio.run(_run())
 
 
+@app.command("tag-images")
+def tag_images_cmd(tenant_id: int, limit: int = 500) -> None:
+    """Find and store a picture for each subject in the index.
+
+    Organisation logos come from the site the channel itself links to; people and
+    places come from Wikidata. Everything is stored in our own bucket, so pages
+    never wait on someone else's server.
+    """
+    import asyncio
+    import json as _json
+
+    from kanalchi.tagimages import fetch_images
+
+    typer.echo(_json.dumps(asyncio.run(fetch_images(tenant_id, limit=limit)), indent=2))
+
+
 @app.command("compare-models")
 def compare_models_cmd(
     tenant_id: int,

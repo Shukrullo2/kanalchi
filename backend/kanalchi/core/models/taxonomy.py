@@ -131,6 +131,11 @@ class Tag(TenantMixin, TimestampMixin, Base):
     source: Mapped[str] = mapped_column(String(16), default="taxonomy")  # taxonomy|manual|programmatic
     post_count: Mapped[int] = mapped_column(Integer, default=0)
     engagement_score: Mapped[float] = mapped_column(Float, default=0.0)
+    # A picture for the subject itself, stored by us rather than hotlinked: a
+    # logo fetched from the organisation's own site, a portrait from Wikidata,
+    # or nothing, in which case the card falls back to a post thumbnail.
+    image_key: Mapped[str | None] = mapped_column(String(300))
+    image_source: Mapped[str | None] = mapped_column(String(16))  # logo|wikidata
     first_seen_version: Mapped[int | None] = mapped_column(Integer)
     last_seen_version: Mapped[int | None] = mapped_column(Integer)
     embedding: Mapped[Any | None] = mapped_column(HALFVEC(EMBED_DIM))
