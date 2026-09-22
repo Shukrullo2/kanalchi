@@ -181,11 +181,17 @@ async def _posts_payload(db, post_ids: list[int], channel_title: str) -> list[di
 
 
 async def pending_extract_ids(tenant_id: int, limit: int = BATCH_SIZE) -> list[int]:
-    """Posts with no successful extraction at the current version."""
+    """Posts with no usable extraction yet.
+
+    Deliberately not "at the current version". A version bump means the schema
+    changed, not that every earlier result became worthless — v2 only removed
+    fields nobody read, so re-extracting 5,000 v1 posts would spend $34 to
+    produce slightly smaller JSON. Anything already succeeded is left alone; a
+    genuine re-extraction is a separate, explicit operation.
+    """
     async with session_scope() as db:
         done = select(Extraction.post_id).where(
             Extraction.tenant_id == tenant_id,
-            Extraction.extractor_version == EXTRACTOR_VERSION,
             Extraction.status.in_(["succeeded", "submitted", "queued"]),
         )
         return list(
@@ -231,18 +237,47 @@ async def estimate_cost(tenant_id: int, sample: int = 10) -> dict[str, Any]:
     # a flat 300 here quoted $35 for work that cost $32 for its first four-tenths.
     # Measure it from this channel's own completed extractions when there are any.
     avg_out = await db_avg_output(tenant_id) or DEFAULT_OUTPUT_TOKENS
+
+    # `count_tokens` counts the whole request, but the system prompt is a stable
+    # cached prefix — measured at 88% of input on the first batch. Pricing all of
+    # it as fresh input triples the quote once a taxonomy digest is in the prompt.
+    cached_share = await db_cached_share(tenant_id)
+    cached = int(avg_in * cached_share)
     per_post = cost_usd(
-        s.extract_model, Usage(input_tokens=int(avg_in), output_tokens=int(avg_out)), batch=True
+        s.extract_model,
+        Usage(input_tokens=int(avg_in) - cached, cache_read_tokens=cached, output_tokens=int(avg_out)),
+        batch=True,
     )
     return {
         "posts_total": total or 0,
         "posts_pending": pending,
         "avg_input_tokens": int(avg_in),
         "avg_output_tokens": int(avg_out),
+        "cached_input_share": round(cached_share, 2),
         "output_measured": avg_out is not None,
         "estimated_usd": round(per_post * pending, 2),
         "model": s.extract_model,
     }
+
+
+async def db_cached_share(tenant_id: int) -> float:
+    """What fraction of extraction input has been served from cache so far."""
+    async with session_scope() as db:
+        row = (
+            await db.execute(
+                select(
+                    func.sum(cast(Extraction.usage["cache_read_tokens"].astext, Float)),
+                    func.sum(cast(Extraction.usage["input_tokens"].astext, Float)),
+                ).where(
+                    Extraction.tenant_id == tenant_id,
+                    Extraction.status == "succeeded",
+                    Extraction.usage.is_not(None),
+                )
+            )
+        ).first()
+    cached, plain = (row[0] or 0.0), (row[1] or 0.0)
+    total = cached + plain
+    return (cached / total) if total else 0.0
 
 
 async def db_avg_output(tenant_id: int) -> float | None:
