@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/AppLink";
 import { tierOf } from "@/lib/dimensions";
 import { compactNumber, postDate } from "@/lib/format";
 import type { GNode } from "@/lib/graph";

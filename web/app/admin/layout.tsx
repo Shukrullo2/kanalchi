@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/AppLink";
 import { getTranslations } from "next-intl/server";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { TelegramLogin } from "@/components/TelegramLogin";

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/AppLink";
 import { useMemo, useState, type ReactNode } from "react";
 import { PanelToggle } from "@/components/graph/PanelToggle";
 import { usePanel } from "@/components/graph/usePanel";

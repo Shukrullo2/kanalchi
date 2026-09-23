@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/AppLink";
 import { FlameIcon } from "@/components/Icons";
 import { PostCard } from "@/components/post/PostCard";
 import { getLocale, getTranslations } from "next-intl/server";

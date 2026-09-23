@@ -1,5 +1,5 @@
 import { getTranslations } from "next-intl/server";
-import Link from "next/link";
+import Link from "@/components/AppLink";
 import { dimensionTint, tierOf } from "@/lib/dimensions";
 import { tagDescription, tagLabel } from "@/lib/labels";
 import type { TagOut } from "@/lib/types";

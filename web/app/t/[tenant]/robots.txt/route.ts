@@ -7,6 +7,11 @@ export async function GET() {
     "User-agent: *",
     "Disallow: /studio",
     "Disallow: /chat",
+    // Every tag combination is a distinct search or graph URL: an endless, expensive crawl.
+    // Tag and post pages carry the same content and are what the sitemap lists.
+    "Disallow: /search",
+    "Disallow: /graph",
+    "Disallow: /api/",
     "Allow: /",
     "",
     `Sitemap: https://${tenant.domain}/sitemap.xml`,

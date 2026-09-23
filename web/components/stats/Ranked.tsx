@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/AppLink";
 
 export type Ranked = { label: string; value: number; href?: string; hint?: string };
 

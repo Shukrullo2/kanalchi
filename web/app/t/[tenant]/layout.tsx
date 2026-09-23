@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/AppLink";
 import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { SiteHeader } from "@/components/SiteHeader";

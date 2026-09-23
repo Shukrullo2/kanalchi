@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/AppLink";
 import { useEffect, useState } from "react";
 import { PipelineMonitor } from "@/components/admin/PipelineMonitor";
 import { call, patch, post } from "@/lib/client";

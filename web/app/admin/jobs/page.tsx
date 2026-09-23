@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/AppLink";
 import { getTranslations } from "next-intl/server";
 import { State } from "@/components/admin/StatusDot";
 import { apiFetch } from "@/lib/api";

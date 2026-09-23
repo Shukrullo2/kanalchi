@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/AppLink";
 import { tierOf } from "@/lib/dimensions";
 import { tagLabel } from "@/lib/labels";
 import type { TagOut } from "@/lib/types";

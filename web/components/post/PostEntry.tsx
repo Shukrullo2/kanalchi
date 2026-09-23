@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/AppLink";
 import { useTranslations } from "next-intl";
 import { EyeIcon } from "@/components/Icons";
 import { TagRef } from "@/components/tags/TagChip";

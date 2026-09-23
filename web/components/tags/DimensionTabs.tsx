@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/AppLink";
 import { byDimensionTier } from "@/lib/dimensions";
 import { dimensionLabel } from "@/lib/labels";
 import type { DimensionOut } from "@/lib/types";
