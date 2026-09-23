@@ -38,17 +38,6 @@ export async function proxy(req: NextRequest) {
     return NextResponse.next({ request: { headers: reqHeaders } });
   }
 
-  // The platform's own domain (and its www.) is the public landing page, not a channel.
-  // `osor.localhost` stands in for it when developing.
-  const landing =
-    (PLATFORM_DOMAIN && (host === PLATFORM_DOMAIN || host === `www.${PLATFORM_DOMAIN}`)) ||
-    (process.env.NODE_ENV === "development" && host === "osor.localhost");
-  if (landing) {
-    const u = url.clone();
-    u.pathname = url.pathname === "/" ? "/landing" : `/landing${url.pathname}`;
-    return NextResponse.rewrite(u, { request: { headers: reqHeaders } });
-  }
-
   if (host === ADMIN_HOST) {
     if (url.pathname.startsWith("/admin")) return NextResponse.next({ request: { headers: reqHeaders } });
     const u = url.clone();
@@ -57,6 +46,17 @@ export async function proxy(req: NextRequest) {
   }
 
   const tenant = await resolveTenant(host);
+  // The platform's own domain (and its www.) is the public landing page. A registered channel
+  // domain always wins, so a mis-set PLATFORM_DOMAIN can never hide a channel behind it.
+  // `osor.localhost` stands in for the platform domain when developing.
+  const landing =
+    (PLATFORM_DOMAIN && (host === PLATFORM_DOMAIN || host === `www.${PLATFORM_DOMAIN}`)) ||
+    (process.env.NODE_ENV === "development" && host === "osor.localhost");
+  if (!tenant && landing) {
+    const u = url.clone();
+    u.pathname = url.pathname === "/" ? "/landing" : `/landing${url.pathname}`;
+    return NextResponse.rewrite(u, { request: { headers: reqHeaders } });
+  }
   if (!tenant) {
     const u = url.clone();
     u.pathname = "/unknown-host";
