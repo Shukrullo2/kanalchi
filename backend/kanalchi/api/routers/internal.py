@@ -51,6 +51,9 @@ async def tls_ask(domain: str = Query(...), db: AsyncSession = Depends(get_db)) 
     # over HTTPS; the channel itself is only ever registered without it.
     if domain.startswith("www."):
         domain = domain[4:]
+    # The platform's own domain is the public landing page.
+    if domain == s.tenant_base_domain:
+        return Response(status_code=200)
     r = get_redis()
     cached = await r.get(f"tls:ask:{domain}")
     if cached is not None:

@@ -52,6 +52,9 @@ services:
     environment:
       API_INTERNAL_URL: http://api:8000
       ADMIN_HOST: ${ADMIN_HOST}
+      # The bare platform domain serves the landing page; its contact buttons go to CONTACT_URL.
+      PLATFORM_DOMAIN: ${PLATFORM_DOMAIN:-}
+      CONTACT_URL: ${CONTACT_URL:-}
       REVALIDATE_SECRET: ${SESSION_SECRET}
       NODE_OPTIONS: --max-old-space-size=256
     ports: ["127.0.0.1:3100:3000"]

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ADMIN_HOST, API_INTERNAL_URL } from "@/lib/config";
+import { ADMIN_HOST, API_INTERNAL_URL, PLATFORM_DOMAIN } from "@/lib/config";
 
 type TenantLite = { slug: string; primary_lang: string; status: string };
 const cache = new Map<string, { at: number; value: TenantLite | null }>();
@@ -36,6 +36,17 @@ export async function proxy(req: NextRequest) {
   if (url.pathname.startsWith("/api/")) {
     reqHeaders.set("x-tenant-host", host);
     return NextResponse.next({ request: { headers: reqHeaders } });
+  }
+
+  // The platform's own domain (and its www.) is the public landing page, not a channel.
+  // `osor.localhost` stands in for it when developing.
+  const landing =
+    (PLATFORM_DOMAIN && (host === PLATFORM_DOMAIN || host === `www.${PLATFORM_DOMAIN}`)) ||
+    (process.env.NODE_ENV === "development" && host === "osor.localhost");
+  if (landing) {
+    const u = url.clone();
+    u.pathname = url.pathname === "/" ? "/landing" : `/landing${url.pathname}`;
+    return NextResponse.rewrite(u, { request: { headers: reqHeaders } });
   }
 
   if (host === ADMIN_HOST) {
