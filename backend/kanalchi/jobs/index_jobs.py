@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
+
+from procrastinate.exceptions import AlreadyEnqueued
 
 from kanalchi.core.jobs import job_run, update_job_run
 from kanalchi.core.logging import get_logger
@@ -29,17 +32,42 @@ async def index_post(post_id: int) -> dict[str, Any]:
 
 
 @app.task(queue="index", name="index.embed_batch", retry=2)
-async def embed_batch(tenant_id: int, post_ids: list[int] | None = None) -> dict[str, Any]:
+async def embed_batch(
+    tenant_id: int, post_ids: list[int] | None = None, job_run_id: int | None = None
+) -> dict[str, Any]:
+    """Embed one slice of pending posts and queue the next. The job run, when there is one,
+    follows the whole chain and only closes when nothing is left."""
     from kanalchi.ai.indexing import pending_embed_ids, rebuild_chunks
     from kanalchi.core.settings import get_settings
 
+    await update_job_run(job_run_id, status="running", started_at=datetime.now(UTC))
     size = get_settings().embed_job_posts
     ids = post_ids or await pending_embed_ids(tenant_id, limit=size)
     if not ids:
+        await update_job_run(job_run_id, status="succeeded", finished_at=datetime.now(UTC))
         return {"chunks": 0}
-    chunks = await rebuild_chunks(ids)
-    if not post_ids and len(ids) >= size:
-        await embed_batch.defer_async(tenant_id=tenant_id)  # keep going in a fresh short job
+    try:
+        chunks = await rebuild_chunks(ids)
+    except Exception as exc:
+        await update_job_run(
+            job_run_id, status="failed", finished_at=datetime.now(UTC), error=str(exc)[:2000]
+        )
+        raise
+    remaining = len(await pending_embed_ids(tenant_id, limit=1)) if not post_ids else 0
+    await update_job_run(
+        job_run_id, progress={"stage": "embedding", "done": len(ids), "message": f"{chunks} chunks"}
+    )
+    if not post_ids and len(ids) >= size and remaining:
+        # keep going in a fresh short job; the lock stops two chains running side by side
+        try:
+            await embed_batch.configure(queueing_lock=f"embed:{tenant_id}").defer_async(
+                tenant_id=tenant_id, job_run_id=job_run_id
+            )
+        except Exception as exc:  # noqa: BLE001
+            if "already" not in str(exc).lower():
+                raise
+    else:
+        await update_job_run(job_run_id, status="succeeded", finished_at=datetime.now(UTC))
     return {"chunks": chunks, "posts": len(ids)}
 
 
@@ -58,12 +86,28 @@ async def index_backlog(tenant_id: int, job_run_id: int | None = None) -> dict[s
             tenant.status = "indexing"
         if not has_profile:
             await update_job_run(job_run_id, progress={"stage": "profiling channel"})
-            await discover(tenant_id)
+            try:
+                await discover(tenant_id)
+            except Exception as exc:  # noqa: BLE001
+                # The profile sharpens extraction but nothing below needs it; the
+                # reconciler tries again later rather than the whole backlog stalling.
+                log.warning("index.backlog.profile_failed", tenant_id=tenant_id, error=str(exc)[:200])
+                await update_job_run(job_run_id, progress={"profile_error": str(exc)[:200]})
         await update_job_run(job_run_id, progress={"stage": "embedding"})
-        await embed_batch.defer_async(tenant_id=tenant_id)
+        await _defer_locked(embed_batch, f"embed:{tenant_id}", tenant_id=tenant_id)
         await update_job_run(job_run_id, progress={"stage": "extracting"})
-        await extract_batch.defer_async(tenant_id=tenant_id)
+        await _defer_locked(extract_batch, f"extract:{tenant_id}", tenant_id=tenant_id)
     return {"ok": True}
+
+
+async def _defer_locked(task, lock: str, **kwargs: Any) -> bool:  # noqa: ANN001
+    """Defer with the same queueing lock the reconciler uses, so a job queued from a chain
+    and one queued from the timer can never run side by side (and submit the same posts twice)."""
+    try:
+        await task.configure(queueing_lock=lock).defer_async(**kwargs)
+        return True
+    except AlreadyEnqueued:
+        return False
 
 
 @app.task(queue="index", name="index.discover", retry=0)
@@ -79,8 +123,9 @@ async def extract_batch(tenant_id: int, job_run_id: int | None = None) -> dict[s
     """Submit one extraction batch; the periodic poller picks up the results."""
     from kanalchi.ai.extraction import submit_batch
 
-    result = await submit_batch(tenant_id)
-    await update_job_run(job_run_id, progress={"stage": "batch submitted", **result})
+    async with job_run(job_run_id):
+        result = await submit_batch(tenant_id)
+        await update_job_run(job_run_id, progress={"stage": "batch submitted", **result})
     return result
 
 
@@ -100,9 +145,9 @@ async def ingest_batch(llm_batch_id: int) -> dict[str, Any]:
         row = await db.get(LlmBatch, llm_batch_id)
         tenant_id = row.tenant_id if row else None
     if tenant_id and await pending_extract_ids(tenant_id, limit=1):
-        await extract_batch.defer_async(tenant_id=tenant_id)
+        await _defer_locked(extract_batch, f"extract:{tenant_id}", tenant_id=tenant_id)
     elif tenant_id:
-        await build_taxonomy.configure(queueing_lock=f"taxonomy:{tenant_id}").defer_async(tenant_id=tenant_id)
+        await _defer_locked(build_taxonomy, f"taxonomy:{tenant_id}", tenant_id=tenant_id)
     return {k: v for k, v in result.items() if k != "posts"}
 
 

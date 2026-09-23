@@ -32,6 +32,8 @@ export type AdminTenant = {
   bot_username: string | null;
   has_bot_token: boolean;
   domain_verified_at: string | null;
+  /** Given a placeholder under the platform domain rather than a domain of its own. */
+  auto_domain: boolean;
   daily_chat_budget_usd: number;
   daily_studio_budget_usd: number;
   created_at: string;
@@ -43,6 +45,8 @@ export type AdminTenant = {
     backfill_status: string;
     backfill_checkpoint: number;
     backfill_total_estimate: number | null;
+    /** Posts actually stored. The checkpoint is a Telegram message id, not a count. */
+    imported: number;
     participants_count: number | null;
   };
 };
@@ -116,8 +120,91 @@ export type Checklist = {
     channel: { done: boolean; title: string | null; username: string | null; total: number | null; account_id: number | null; noforwards: boolean | null };
     bot: { done: boolean; username: string | null };
     domain: { done: boolean; detail: string; resolves: boolean };
-    backfill: { done: boolean; status: string | null; checkpoint: number; total: number | null };
+    backfill: { done: boolean; status: string | null; checkpoint: number; imported: number; total: number | null };
   };
+  /** The most recent job for this tenant, if it failed. */
+  last_error: { type: string; error: string | null; at: string | null } | null;
+  pipeline: PipelineStatus;
+};
+
+export type PipelineStage = "import" | "profile" | "embed" | "extract" | "taxonomy" | "done";
+
+/** Where a channel's indexing stands, computed from the database rather than from any one job. */
+export type PipelineStatus = {
+  stage: PipelineStage;
+  tenant_status: string;
+  stages: {
+    import: { done: boolean; status: string | null; imported: number; total: number | null };
+    profile: { done: boolean; possible: boolean };
+    embed: { done: boolean; embedded: number; skipped: number; pending: number; total: number };
+    extract: {
+      done: boolean;
+      succeeded: number;
+      in_flight: number;
+      failed: number;
+      pending: number;
+      total: number;
+      batches: { id: number; status: string; requests: number; submitted_at: string | null; stale: boolean }[];
+    };
+    taxonomy: { done: boolean; version_no: number | null; status: string | null; version_id: number | null };
+  };
+  running: { type: string; progress: Record<string, unknown> }[];
+  attention: string[];
+  workers: { telegram: boolean | null; index: boolean | null };
+  checked_at: string;
+};
+
+export type PipelineEstimate = {
+  posts_total: number;
+  posts_imported: number;
+  avg_post_tokens: number;
+  measured_from_channel: boolean;
+  lines: Record<string, number>;
+  total_usd: number;
+  models: Record<string, string>;
+  extraction_measured_usd?: number;
+};
+
+export type MemberOut = {
+  tg_user_id: number;
+  name: string;
+  username: string | null;
+  role: "owner" | "editor";
+  invited: boolean;
+  verified_admin_at: string | null;
+  notifications_linked: boolean;
+  last_login_at: string | null;
+};
+
+export type TaxonomyVersionOut = {
+  id: number;
+  version_no: number;
+  status: string;
+  is_active?: boolean;
+  stats: Record<string, { candidates: number; tags: number; dropped: number }>;
+  diff?: Record<string, number>;
+  cost_usd: number;
+  built_at: string | null;
+  applied_at: string | null;
+};
+
+export type TaxonomyPreview = {
+  id: number;
+  version_no: number;
+  status: string;
+  built_at: string | null;
+  applied_at: string | null;
+  cost_usd: number;
+  model: string;
+  dimensions: {
+    key: string;
+    labels: Record<string, string>;
+    new: string[];
+    new_count: number;
+    kept_count: number;
+    dropped_count: number;
+  }[];
+  diff: Record<string, unknown>;
 };
 
 export type TgAccount = {
@@ -134,6 +221,7 @@ export type TgAccount = {
 export type JobRunOut = {
   id: number;
   tenant_id: number | null;
+  tenant_domain: string | null;
   type: string;
   status: string;
   progress: { stage?: string; done?: number; total?: number; checkpoint?: number; message?: string };
@@ -147,7 +235,8 @@ export type JobRunOut = {
 export type DimensionOut = {
   key: string;
   labels: Record<string, string>;
-  description: string | null;
+  /** One entry per locale, like `labels`; empty when nobody has written one. */
+  descriptions: Record<string, string>;
   kind: string;
   tag_count: number;
 };
@@ -156,7 +245,8 @@ export type TagOut = {
   slug: string;
   name: string;
   labels: Record<string, string>;
-  description: string | null;
+  /** One entry per locale, like `labels`; empty for about half the tags. */
+  descriptions: Record<string, string>;
   dimension: string | null;
   post_count: number;
   engagement_score: number;
@@ -165,6 +255,9 @@ export type TagOut = {
   thumb_url?: string | null;
   image_source?: "logo" | "logo_light" | "wikidata" | null;
   confidence?: number;
+  /** The span of the tag's posts. On the list endpoint only; absent on nested tags. */
+  first_post_at?: string | null;
+  last_post_at?: string | null;
 };
 
 export type TagDetail = TagOut & {
@@ -253,6 +346,7 @@ export type DraftOut = {
   published_tg_message_id: number | null;
   published_at: string | null;
   publish_error: string | null;
+  disable_preview: boolean;
   suggested_tags: TagOut[];
   ai_generated: boolean;
   length: number;
@@ -287,6 +381,12 @@ export type StudioSettings = {
   voice_profile: Record<string, unknown> | null;
   channel_profile: Record<string, unknown> | null;
   bot_username: string | null;
+  /** The channel's public @username, if it has one; needed to link to a sent post. */
+  channel_username: string | null;
+  /** Whether this member has pressed /start in the bot, which every notification needs. */
+  notifications_linked: boolean;
+  role: "owner" | "editor";
+  paused: boolean;
   webhook_ready: boolean;
   locales: string[];
 };
@@ -317,3 +417,38 @@ export type StoryDetail = StoryOut & { items: PostOut[] };
 export type EntitySummaryOut =
   | { available: false }
   | { available: true; summary: Record<string, string>; citations: number[]; generated_at: string; is_stale: boolean };
+
+/** One post as the map draws it: a dot with a date, a size, and the things it points at. */
+export type GraphPost = {
+  id: number;
+  date: string;
+  title: string;
+  views: number;
+  /** The post this one replied to, when that post is also in the window. */
+  reply: number | null;
+  /** Posts of the same channel this one links to, when they are in the window. */
+  links: number[];
+  /** Indexes into `GraphOut.tags`. */
+  tags: number[];
+};
+
+export type GraphTag = {
+  slug: string;
+  name: string;
+  labels: Record<string, string>;
+  dimension: string | null;
+  /** Posts in the whole archive. */
+  post_count: number;
+  /** Posts in this window. */
+  count: number;
+};
+
+export type GraphOut = {
+  from: string;
+  to: string;
+  truncated: boolean;
+  posts: GraphPost[];
+  tags: GraphTag[];
+  /** Posts per month over the whole archive, oldest first. */
+  months: { month: string; count: number }[];
+};

@@ -1,23 +1,24 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
 
 const ITEMS = [
-  { href: "/studio", label: "Dashboard", exact: true },
-  { href: "/studio/ideas", label: "Ideas" },
-  { href: "/studio/drafts", label: "Drafts" },
-  { href: "/studio/research", label: "Research" },
-  { href: "/studio/tags", label: "Index" },
-  { href: "/studio/settings", label: "Settings" },
-];
+  { href: "/studio", key: "dashboard", exact: true },
+  { href: "/studio/ideas", key: "ideas" },
+  { href: "/studio/drafts", key: "drafts" },
+  { href: "/studio/research", key: "research" },
+  { href: "/studio/settings", key: "settings" },
+] as const;
 
 export function StudioNav() {
+  const t = useTranslations("studio.nav");
   const pathname = usePathname();
   return (
     <nav className="no-scrollbar mt-4 flex gap-6 overflow-x-auto border-b text-sm">
       {ITEMS.map((item) => {
-        const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
+        const active = "exact" in item && item.exact ? pathname === item.href : pathname.startsWith(item.href);
         return (
           <Link
             key={item.href}
@@ -25,7 +26,7 @@ export function StudioNav() {
             className="nav-link nav-tab whitespace-nowrap"
             data-active={active}
           >
-            {item.label}
+            {t(item.key)}
           </Link>
         );
       })}

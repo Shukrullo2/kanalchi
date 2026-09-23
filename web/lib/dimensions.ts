@@ -67,3 +67,32 @@ export function byDimensionTier<T extends { key: string; tag_count: number }>(di
     (a, b) => rank[tierOf(a.key)] - rank[tierOf(b.key)] || b.tag_count - a.tag_count,
   );
 }
+
+/**
+ * A colour of its own for each group's cloud.
+ *
+ * The three tiers exist because a row of eight tags under a post, each in its
+ * own hue, reads as confetti. A cloud is not that row: it is one group, alone
+ * on the page, so a hue per group costs nothing and tells you at a glance that
+ * the tab you just pressed took you somewhere else.
+ *
+ * What comes back is a tint, not a colour. The stylesheet mixes a quarter of it
+ * into the tier's own tone, so every cloud stays recognisably gold, sky or grey
+ * — and stays whatever those tokens mean in the current theme — while no two
+ * groups land on quite the same shade. The hue is hashed from the key, so a
+ * group keeps its colour forever and dimensions discovered during indexing get
+ * one without anybody choosing it.
+ */
+export function dimensionTint(key: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < key.length; i += 1) {
+    h ^= key.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  const n = h >>> 0;
+  // Saturation and lightness vary as well as hue, because hue alone is not
+  // enough: across two dozen groups and 360 degrees a clash is more likely than
+  // not, and `custom_banks` and `custom_data_sources` did in fact land on the
+  // same one. Three varying channels make a visible collision improbable.
+  return `hsl(${n % 360} ${58 + ((n >>> 9) % 26)}% ${50 + ((n >>> 18) % 15)}%)`;
+}

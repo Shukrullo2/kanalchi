@@ -4,7 +4,11 @@ import type { PostPage, TenantPublic } from "@/lib/types";
 export async function GET() {
   const tenant = await apiFetch<TenantPublic>("/api/tenant");
   const base = `https://${tenant.domain}`;
-  const urls: string[] = [`<url><loc>${base}/</loc></url>`, `<url><loc>${base}/top</loc></url>`];
+  const urls: string[] = [
+    `<url><loc>${base}/</loc></url>`,
+    `<url><loc>${base}/posts</loc></url>`,
+    `<url><loc>${base}/top</loc></url>`,
+  ];
   let cursor: string | null = null;
   for (let i = 0; i < 40; i++) {
     const page: PostPage = await apiFetch<PostPage>(

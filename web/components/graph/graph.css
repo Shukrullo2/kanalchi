@@ -1,0 +1,327 @@
+/* The map page. The canvas is the page: it sits behind everything, under the
+   floating header, and the controls float over it in panels that can be put
+   away. Everything hangs off the page's own variables, so the canvas and its
+   chrome follow the theme the same way the cards do. */
+
+.graph {
+  /* Where floating things start: under the site's floating header bar. */
+  --graph-top: 4.75rem;
+  --graph-gap: 0.75rem;
+}
+
+/* --- the canvas ----------------------------------------------------------- */
+.graph-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: radial-gradient(ellipse at 50% 40%, color-mix(in srgb, var(--surface) 55%, var(--background)) 0%, var(--background) 70%);
+  transition: opacity 0.2s;
+}
+.graph[data-pending="true"] .graph-stage { opacity: 0.55; }
+.graph-stage canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+.graph-stage canvas.dragging { cursor: grabbing; }
+.graph-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 0.9rem;
+  pointer-events: none;
+}
+
+/* Everything floating shares one surface. */
+.graph-float {
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: saturate(160%) blur(12px);
+  -webkit-backdrop-filter: saturate(160%) blur(12px);
+  box-shadow: var(--shadow-md);
+}
+
+/* --- the controls ---------------------------------------------------------- */
+.graph-toggle {
+  position: fixed;
+  left: var(--graph-gap);
+  top: var(--graph-top);
+  z-index: 31;
+  width: 2.25rem;
+  height: 2.25rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.625rem;
+  border: 1px solid var(--border-strong);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: saturate(160%) blur(12px);
+  -webkit-backdrop-filter: saturate(160%) blur(12px);
+  box-shadow: var(--shadow-md);
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.graph-toggle:hover, .graph-toggle[data-open="true"] { color: var(--foreground); border-color: var(--ring); }
+
+.graph-controls {
+  position: fixed;
+  left: var(--graph-gap);
+  top: calc(var(--graph-top) + 2.25rem + 0.5rem);
+  bottom: var(--graph-gap);
+  z-index: 30;
+  width: min(21rem, calc(100vw - 2 * var(--graph-gap)));
+  max-height: calc(100vh - var(--graph-top) - 2.25rem - 0.5rem - var(--graph-gap));
+  overflow: auto;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: saturate(160%) blur(12px);
+  -webkit-backdrop-filter: saturate(160%) blur(12px);
+  box-shadow: var(--shadow-md);
+  font-size: 0.85rem;
+  scrollbar-width: thin;
+}
+.graph-controls[data-open="false"] { display: none; }
+.graph-controls-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.8rem 1rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+.graph-controls-title { font-family: var(--font-display); font-weight: 700; font-size: 1rem; letter-spacing: -0.01em; }
+.graph-count { font-size: 0.75rem; color: var(--muted-foreground); white-space: nowrap; }
+
+.graph-controls details { border-bottom: 1px solid var(--border); }
+.graph-controls details:last-child { border-bottom: 0; }
+.graph-controls summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  user-select: none;
+}
+.graph-controls summary::-webkit-details-marker { display: none; }
+.graph-controls summary::before {
+  content: "";
+  width: 0.35rem;
+  height: 0.35rem;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.15s;
+}
+.graph-controls details[open] > summary::before { transform: rotate(45deg); }
+.graph-controls summary:hover { color: var(--foreground); }
+/* Contents sit inside the panel's side margins; a full-width field must not add them on top. */
+.graph-controls details > :not(summary) { margin-inline: 1rem; max-width: calc(100% - 2rem); }
+.graph-controls details > :last-child { margin-bottom: 0.8rem; }
+
+.graph-search { padding: 0.5rem 0.8rem; }
+.graph-modes { display: flex; gap: 0.35rem; }
+.graph-modes .pill { flex: 1; justify-content: center; padding: 0.4rem 0.6rem; font-size: 0.8rem; }
+
+.graph-dims { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.graph-dim {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 0.2rem 0.65rem;
+  font: inherit;
+  font-size: 0.76rem;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
+}
+.graph-dim i { width: 0.5rem; height: 0.5rem; border-radius: 9999px; background: var(--tone, var(--muted-foreground)); opacity: 0.35; }
+.graph-dim b { font-weight: 600; opacity: 0.6; font-variant-numeric: tabular-nums; }
+.graph-dim[data-on="true"] { color: var(--foreground); border-color: var(--border-strong); }
+.graph-dim[data-on="true"] i { opacity: 1; }
+.graph-dim:hover { border-color: var(--ring); }
+
+.graph-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin-top: 0.5rem; }
+.graph-hint { font-size: 0.76rem; line-height: 1.4; color: var(--muted-foreground); }
+.graph-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 9999px;
+  padding: 0.2rem 0.3rem 0.2rem 0.7rem;
+  background: var(--surface-2);
+  border: 1px solid color-mix(in srgb, var(--tone) 40%, transparent);
+  color: var(--tone);
+  font-size: 0.78rem;
+}
+.graph-chip button {
+  all: unset;
+  cursor: pointer;
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 9999px;
+  display: grid;
+  place-items: center;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+.graph-chip button:hover { background: color-mix(in srgb, var(--tone) 20%, transparent); }
+
+.graph-timeline-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; font-size: 0.78rem; color: var(--muted-foreground); }
+.graph-range { color: var(--foreground); font-weight: 600; }
+.graph-quick { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.4rem; }
+.graph-quick button {
+  all: unset;
+  cursor: pointer;
+  padding: 0.15rem 0.5rem;
+  border-radius: 0.4rem;
+  font-size: 0.74rem;
+  color: var(--muted-foreground);
+}
+.graph-quick button:hover, .graph-quick button[data-active="true"] { color: var(--foreground); background: var(--surface-2); }
+.graph-tl { display: block; width: 100%; height: 58px; margin-top: 0.4rem; }
+.graph-tl-bar { fill: var(--border-strong); }
+.graph-tl-axis text { fill: var(--muted-foreground); font-size: 10px; }
+.graph-tl-brush .selection { fill: color-mix(in srgb, var(--accent) 18%, transparent); stroke: var(--accent); stroke-width: 1; }
+.graph-tl-brush .handle { fill: var(--accent); }
+.graph-notice { margin: 0.5rem 0 0; font-size: 0.76rem; line-height: 1.4; color: var(--warning); }
+
+/* --- zoom, legend, tooltip ------------------------------------------------- */
+.graph-hud { position: fixed; right: var(--graph-gap); top: var(--graph-top); z-index: 30; display: flex; gap: 0.35rem; }
+.graph-hud button {
+  all: unset;
+  cursor: pointer;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.625rem;
+  border: 1px solid var(--border-strong);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: saturate(160%) blur(12px);
+  -webkit-backdrop-filter: saturate(160%) blur(12px);
+  box-shadow: var(--shadow-md);
+  display: grid;
+  place-items: center;
+  font-size: 1rem;
+  color: var(--muted-foreground);
+}
+.graph-hud button:hover { color: var(--foreground); border-color: var(--ring); }
+
+.graph-legend {
+  position: fixed;
+  right: var(--graph-gap);
+  bottom: var(--graph-gap);
+  z-index: 30;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.9rem;
+  padding: 0.45rem 0.8rem;
+  border-radius: 0.625rem;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
+  font-size: 0.74rem;
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
+.graph-legend span::before {
+  content: "";
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 9999px;
+  margin-right: 0.4rem;
+  background: var(--c);
+  vertical-align: middle;
+}
+
+.graph-tip {
+  position: absolute;
+  z-index: 5;
+  max-width: min(22rem, 70vw);
+  padding: 0.5rem 0.7rem;
+  border-radius: 0.6rem;
+  border: 1px solid var(--border-strong);
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  box-shadow: var(--shadow-lg);
+  font-size: 0.8rem;
+  line-height: 1.35;
+  pointer-events: none;
+}
+.graph-tip b { display: block; font-weight: 600; }
+.graph-tip small { color: var(--muted-foreground); }
+
+/* --- the thing you clicked -------------------------------------------------- */
+.graph-panel {
+  position: fixed;
+  right: var(--graph-gap);
+  top: calc(var(--graph-top) + 2.25rem + 0.5rem);
+  bottom: calc(var(--graph-gap) + 2.6rem);
+  z-index: 32;
+  width: min(22rem, calc(100vw - 2 * var(--graph-gap)));
+  display: flex;
+  flex-direction: column;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: saturate(160%) blur(12px);
+  -webkit-backdrop-filter: saturate(160%) blur(12px);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+.graph-panel header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.9rem 1rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+.graph-panel header h3 {
+  margin: 0;
+  flex: 1;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.3;
+}
+.graph-panel header button { all: unset; cursor: pointer; color: var(--muted-foreground); font-size: 1.1rem; line-height: 1; padding: 0.1rem 0.3rem; }
+.graph-panel header button:hover { color: var(--foreground); }
+.graph-panel-body { padding: 0.6rem 1rem 1rem; overflow: auto; font-size: 0.85rem; }
+.graph-meta { color: var(--muted-foreground); font-size: 0.78rem; font-variant-numeric: tabular-nums; }
+.graph-panel-tags { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.6rem 0; }
+.graph-panel-tags button { cursor: pointer; font: inherit; }
+.graph-panel-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.8rem; }
+.graph-panel-actions .btn-primary, .graph-panel-actions .btn-ghost { padding: 0.45rem 0.8rem; font-size: 0.82rem; }
+.graph-panel-list { list-style: none; margin: 0.6rem 0 0; padding: 0; }
+.graph-panel-list li {
+  display: grid;
+  grid-template-columns: 5rem 1fr;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.45rem 0;
+  border-top: 1px solid var(--border);
+}
+.graph-panel-list li:first-child { border-top: 0; }
+.graph-panel-list a { text-decoration: none; }
+.graph-panel-list a:hover { color: var(--accent); }
+
+/* --- phone: both panels become sheets from the bottom ----------------------- */
+@media (max-width: 40rem) {
+  .graph-controls, .graph-panel {
+    left: var(--graph-gap);
+    right: var(--graph-gap);
+    top: auto;
+    bottom: var(--graph-gap);
+    width: auto;
+    max-height: 58vh;
+  }
+  .graph-legend { display: none; }
+}

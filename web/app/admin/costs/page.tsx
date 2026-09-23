@@ -11,7 +11,8 @@ type Props = { searchParams: Promise<{ days?: string }> };
 
 export default async function CostsPage({ searchParams }: Props) {
   const sp = await searchParams;
-  const days = Number(sp.days ?? 30);
+  const requested = Number(sp.days);
+  const days = [7, 30, 90, 365].includes(requested) ? requested : 30;
   const [data, t] = await Promise.all([
     apiFetch<CostsOut>(`/api/admin/costs?days=${days}`, { admin: true }),
     getTranslations("admin"),

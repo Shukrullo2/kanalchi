@@ -16,6 +16,9 @@ export default async function ResearchPage() {
         thinking: t("thinking"),
         disabled: t("disabled"),
         sources: t("sources"),
+        failed: t("failed"),
+        unavailable: t("unavailable"),
+        wrong: t("wrong"),
       }}
     />
   );

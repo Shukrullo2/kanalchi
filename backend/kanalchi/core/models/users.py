@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, String, Text
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, Text, false
 from sqlalchemy.orm import Mapped, mapped_column
 
 from kanalchi.core.models.base import Base, TimestampMixin, pk
@@ -32,6 +32,10 @@ class TenantMember(TimestampMixin, Base):
     role: Mapped[str] = mapped_column(String(12), default="owner")  # owner|editor
     verified_admin_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     dm_chat_id: Mapped[int | None] = mapped_column(BigInteger)  # set once the member /start-s the tenant bot
+    # Added by an admin or the owner rather than proven through Telegram, so sign-in
+    # does not ask the channel whether they administer it. This is what lets a channel
+    # without a bot of its own have a blogger.
+    invited: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
 
 class PlatformAdmin(TimestampMixin, Base):

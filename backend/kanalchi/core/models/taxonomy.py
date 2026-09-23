@@ -81,7 +81,9 @@ class Dimension(TenantMixin, TimestampMixin, Base):
     key: Mapped[str] = mapped_column(String(48), nullable=False)
     kind: Mapped[str] = mapped_column(String(16), default="open")  # open|fixed|programmatic
     labels: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)  # {uz, ru, en}
-    description: Mapped[str | None] = mapped_column(Text)
+    # Reader-facing, one entry per locale like `labels`: this line is printed under
+    # the group's title on the index, so it cannot be English-only.
+    descriptions: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)  # {uz, ru, en}
     extraction_hint: Mapped[str | None] = mapped_column(Text)
     is_universal: Mapped[bool] = mapped_column(Boolean, default=True)
     is_visible: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -123,7 +125,7 @@ class Tag(TenantMixin, TimestampMixin, Base):
     canonical_name: Mapped[str] = mapped_column(String(200), nullable=False)
     canonical_norm: Mapped[str] = mapped_column(String(200), nullable=False)
     labels: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
-    description: Mapped[str | None] = mapped_column(Text)
+    descriptions: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)  # {uz, ru, en}
     parent_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("tags.id", ondelete="SET NULL"))
     merged_into_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("tags.id", ondelete="SET NULL"))
     status: Mapped[str] = mapped_column(String(12), default="active")  # active|hidden|merged

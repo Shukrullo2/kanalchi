@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeftIcon, CloseIcon, ExternalIcon, SparkIcon } from "@/components/Icons";
 import { TagChip } from "@/components/tags/TagChip";
@@ -22,12 +22,25 @@ const MARKS = [
   { cmd: "strikeThrough", label: "S", className: "line-through" },
 ] as const;
 
-export function DraftEditor({ initial, botUsername }: { initial: DraftOut; botUsername: string | null }) {
+export function DraftEditor({
+  initial,
+  botUsername,
+  channelUsername,
+}: {
+  initial: DraftOut;
+  botUsername: string | null;
+  /** The channel's public @username, which is what a link to a sent post needs. */
+  channelUsername: string | null;
+}) {
+  const t = useTranslations("studio.editor");
+  const or = useTranslations("common")("or");
+  const status = useTranslations("studio.status");
   const router = useRouter();
   const locale = useLocale();
   const editorRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState(initial);
   const [html, setHtml] = useState(initial.html);
+  const [title, setTitle] = useState(initial.title);
   const [saving, setSaving] = useState<"idle" | "saving" | "saved">("idle");
   const [error, setError] = useState<string | null>(null);
   const [scheduleAt, setScheduleAt] = useState("");
@@ -63,7 +76,7 @@ export function DraftEditor({ initial, botUsername }: { initial: DraftOut; botUs
   }
 
   function addLink() {
-    const url = window.prompt("Link URL");
+    const url = window.prompt(t("linkPrompt"));
     if (!url) return;
     editorRef.current?.focus();
     document.execCommand("createLink", false, url);
@@ -91,7 +104,35 @@ export function DraftEditor({ initial, botUsername }: { initial: DraftOut; botUs
 
   async function removeMedia(index: number) {
     const media = (draft.media ?? []).filter((_, i) => i !== index);
-    setDraft(await patch<DraftOut>(`/api/studio/drafts/${draft.id}`, { media }));
+    try {
+      setDraft(await patch<DraftOut>(`/api/studio/drafts/${draft.id}`, { media }));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  /** Title and preview flag save straight away; they are not what the blogger is typing. */
+  async function saveMeta(fields: { title?: string; disable_preview?: boolean }) {
+    try {
+      setDraft(await patch<DraftOut>(`/api/studio/drafts/${draft.id}`, fields));
+      setSaving("saved");
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  /** The queued send checks the row before it fires, so putting the row back to "draft" is enough. */
+  async function cancelSchedule() {
+    setBusy(true);
+    setError(null);
+    try {
+      setDraft(await post<DraftOut>(`/api/studio/drafts/${draft.id}/cancel`, {}));
+      router.refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function publish(when?: string) {
@@ -114,22 +155,49 @@ export function DraftEditor({ initial, botUsername }: { initial: DraftOut; botUs
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <Link href="/studio/drafts" className="link-quiet flex items-center gap-1.5 text-sm">
-          <ArrowLeftIcon size={14} /> drafts
+          <ArrowLeftIcon size={14} /> {t("back")}
         </Link>
-        <span className="chip">{draft.status}</span>
-        {draft.ai_generated ? <span className="chip">AI draft</span> : null}
+        <span className="chip">{status.has(draft.status) ? status(draft.status) : draft.status}</span>
+        {draft.ai_generated ? <span className="chip">{t("aiDraft")}</span> : null}
         <span className="ml-auto text-xs text-muted-foreground">
-          {saving === "saving" ? "Saving…" : saving === "saved" ? "Saved" : ""}
+          {saving === "saving" ? t("saving") : saving === "saved" ? t("saved") : ""}
         </span>
       </div>
 
       {published ? (
         <div className="border-l-2 py-1 pl-3 text-sm" style={{ borderColor: "var(--success)" }}>
           <span suppressHydrationWarning>
-            Published{draft.published_at ? ` on ${fullDate(draft.published_at, locale)}` : ""}.
+            {draft.published_at
+              ? t("publishedOn", { date: fullDate(draft.published_at, locale) })
+              : t("published")}
           </span>
-          {botUsername ? ` Sent by @${botUsername}.` : ""}
+          {botUsername ? t("sentByBot", { bot: botUsername }) : ""}
         </div>
+      ) : draft.status === "scheduled" && draft.scheduled_at ? (
+        <div className="flex flex-wrap items-center gap-3 border-l-2 py-1 pl-3 text-sm" style={{ borderColor: "var(--primary)" }}>
+          <span suppressHydrationWarning>{t("scheduledFor", { date: fullDate(draft.scheduled_at, locale) })}</span>
+          <button onClick={() => void cancelSchedule()} disabled={busy} className="link-quiet text-xs">
+            {t("cancelSchedule")}
+          </button>
+        </div>
+      ) : draft.publish_error ? (
+        <div className="border-l-2 py-1 pl-3 text-sm" style={{ borderColor: "var(--destructive)", color: "var(--destructive)" }}>
+          {draft.publish_error}
+        </div>
+      ) : null}
+
+      {!published ? (
+        <input
+          className="input-field"
+          placeholder={t("titlePlaceholder")}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onBlur={() => {
+            if (title !== draft.title) void saveMeta({ title });
+          }}
+        />
+      ) : draft.title ? (
+        <h2 className="text-[0.9375rem] font-medium">{draft.title}</h2>
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -148,10 +216,10 @@ export function DraftEditor({ initial, botUsername }: { initial: DraftOut; botUs
               </button>
             ))}
             <button type="button" onClick={addLink} disabled={published} className="btn-ghost h-8 px-2 text-xs">
-              link
+              {t("link")}
             </button>
             <label className="btn-ghost h-8 cursor-pointer px-2 text-xs">
-              media
+              {t("media")}
               <input
                 type="file"
                 className="hidden"
@@ -163,6 +231,15 @@ export function DraftEditor({ initial, botUsername }: { initial: DraftOut; botUs
                   e.target.value = "";
                 }}
               />
+            </label>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={draft.disable_preview}
+                disabled={published}
+                onChange={(e) => void saveMeta({ disable_preview: e.target.checked })}
+              />
+              {t("hidePreview")}
             </label>
             <span className={`ml-auto text-xs tabular-nums ${used > limit ? "text-destructive" : "text-muted-foreground"}`}>
               {used} / {limit}
@@ -179,7 +256,7 @@ export function DraftEditor({ initial, botUsername }: { initial: DraftOut; botUs
             }}
             dangerouslySetInnerHTML={{ __html: initial.html }}
             className="tg-body min-h-56 rounded-xl border bg-surface p-4 outline-none focus:border-ring"
-            data-placeholder="Write your post…"
+            data-placeholder={t("placeholder")}
           />
 
           {(draft.media ?? []).length > 0 ? (
@@ -198,7 +275,7 @@ export function DraftEditor({ initial, botUsername }: { initial: DraftOut; botUs
                     <button
                       onClick={() => void removeMedia(i)}
                       className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-foreground text-background"
-                      aria-label="Remove"
+                      aria-label={t("remove")}
                     >
                       <CloseIcon size={10} />
                     </button>
@@ -210,7 +287,7 @@ export function DraftEditor({ initial, botUsername }: { initial: DraftOut; botUs
         </section>
 
         <section className="space-y-2">
-          <div className="text-xs text-muted-foreground">Preview</div>
+          <div className="text-xs text-muted-foreground">{t("preview")}</div>
           <div className="rounded-xl bg-surface-2 p-4">
             <div className="max-w-md rounded-2xl rounded-bl-sm bg-surface p-3 shadow-sm">
               {(draft.media ?? []).length > 0 ? (
@@ -233,7 +310,7 @@ export function DraftEditor({ initial, botUsername }: { initial: DraftOut; botUs
 
           {draft.suggested_tags.length > 0 ? (
             <div className="space-y-1.5">
-              <div className="text-xs text-muted-foreground">Will be filed under</div>
+              <div className="text-xs text-muted-foreground">{t("willBeFiled")}</div>
               <div className="flex flex-wrap gap-1.5">
                 {draft.suggested_tags.map((t) => (
                   <TagChip key={t.slug} tag={t} locale={locale} />
@@ -252,10 +329,10 @@ export function DraftEditor({ initial, botUsername }: { initial: DraftOut; botUs
 
       {!published ? (
         <div className="card-surface flex flex-wrap items-center gap-2 p-4">
-          <button onClick={() => void publish()} disabled={busy || used > limit} className="btn-primary">
-            Publish now
+          <button onClick={() => void publish()} disabled={busy || used > limit || !botUsername} className="btn-primary">
+            {t("publishNow")}
           </button>
-          <span className="text-xs text-muted-foreground">or</span>
+          <span className="text-xs text-muted-foreground">{or}</span>
           <input
             type="datetime-local"
             value={scheduleAt}
@@ -264,39 +341,53 @@ export function DraftEditor({ initial, botUsername }: { initial: DraftOut; botUs
           />
           <button
             onClick={() => void publish(scheduleAt)}
-            disabled={busy || !scheduleAt || used > limit}
+            disabled={busy || !scheduleAt || used > limit || !botUsername}
             className="btn-ghost"
           >
-            Schedule
+            {t("schedule")}
           </button>
+          {!botUsername ? (
+            <span className="basis-full text-xs" style={{ color: "var(--warning)" }}>
+              {t("noBot")}
+            </span>
+          ) : null}
           <button
             onClick={async () => {
-              setDraft(await post<DraftOut>(`/api/studio/drafts/${draft.id}/suggest-tags`, {}));
-              router.refresh();
+              setBusy(true);
+              setError(null);
+              try {
+                setDraft(await post<DraftOut>(`/api/studio/drafts/${draft.id}/suggest-tags`, {}));
+                router.refresh();
+              } catch (e) {
+                setError((e as Error).message);
+              } finally {
+                setBusy(false);
+              }
             }}
+            disabled={busy}
             className="btn-ghost"
           >
-            <SparkIcon size={13} /> Suggest tags
+            <SparkIcon size={13} /> {t("suggestTags")}
           </button>
           <button
             onClick={async () => {
-              if (!window.confirm("Delete this draft?")) return;
+              if (!window.confirm(t("confirmDelete"))) return;
               await del(`/api/studio/drafts/${draft.id}`);
               router.push("/studio/drafts");
             }}
             className="link-quiet ml-auto text-xs"
           >
-            Delete draft
+            {t("deleteDraft")}
           </button>
         </div>
-      ) : draft.published_tg_message_id ? (
+      ) : draft.published_tg_message_id && channelUsername ? (
         <a
-          href={`https://t.me/${botUsername ?? ""}`}
+          href={`https://t.me/${channelUsername}/${draft.published_tg_message_id}`}
           className="link-quiet flex items-center gap-1 text-sm"
           target="_blank"
           rel="noreferrer"
         >
-          Open in Telegram <ExternalIcon size={12} />
+          {t("openTelegram")} <ExternalIcon size={12} />
         </a>
       ) : null}
     </div>

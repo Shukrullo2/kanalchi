@@ -1,24 +1,23 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { ArrowRightIcon } from "@/components/Icons";
 import { apiFetch } from "@/lib/api";
 import { compactNumber } from "@/lib/format";
 import type { StudioOverview } from "@/lib/types";
 
 export default async function StudioDashboard() {
-  const data = await apiFetch<StudioOverview>("/api/studio/overview");
+  const [data, t] = await Promise.all([
+    apiFetch<StudioOverview>("/api/studio/overview"),
+    getTranslations("studio.home"),
+  ]);
   const budgetUsed = data.studio_budget_usd ? (data.studio_spent_usd / data.studio_budget_usd) * 100 : 0;
 
   // Things worth acting on, gathered into one list instead of one card each.
   const prompts = [
-    data.pending_tags > 0 && {
-      href: "/studio/tags",
-      title: `${data.pending_tags} names are waiting to be filed`,
-      body: "They keep coming up in your posts but are not in the index yet.",
-    },
     !data.has_voice_profile && {
       href: "/studio/settings",
-      title: "Teach the assistant how you write",
-      body: "It reads your own posts once, and drafts start sounding like you.",
+      title: t("teachVoice"),
+      body: t("teachVoiceBody"),
     },
   ].filter(Boolean) as { href: string; title: string; body: string }[];
 
@@ -26,10 +25,10 @@ export default async function StudioDashboard() {
     <div>
       <dl className="flex flex-wrap gap-x-10 gap-y-4 pb-6">
         {[
-          ["Posts", compactNumber(data.posts)],
-          ["Subscribers", data.subscribers ? compactNumber(data.subscribers) : "—"],
-          ["Drafts", String(data.drafts.draft ?? 0)],
-          ["Scheduled", String(data.drafts.scheduled ?? 0)],
+          [t("posts"), compactNumber(data.posts)],
+          [t("subscribers"), data.subscribers ? compactNumber(data.subscribers) : "—"],
+          [t("drafts"), String(data.drafts.draft ?? 0)],
+          [t("scheduled"), String(data.drafts.scheduled ?? 0)],
         ].map(([label, value]) => (
           <div key={label}>
             <dd className="stat-value">{value}</dd>
@@ -40,16 +39,14 @@ export default async function StudioDashboard() {
 
       <div className="flex flex-wrap gap-2 border-t pt-6">
         <Link href="/studio/drafts" className="btn-primary">
-          Write a post
+          {t("write")}
         </Link>
         <Link href="/studio/research" className="btn-ghost">
-          Research the archive
+          {t("research")}
         </Link>
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
-        {data.bot_username
-          ? `Posts go out through @${data.bot_username}.`
-          : "Connect a bot in settings before you can publish."}
+        {data.bot_username ? t("sentBy", { bot: data.bot_username }) : t("noBot")}
       </p>
 
       {prompts.length > 0 ? (
@@ -70,7 +67,7 @@ export default async function StudioDashboard() {
 
       <section className="mt-8 max-w-sm">
         <div className="mb-1.5 flex items-baseline justify-between text-sm">
-          <span className="text-muted-foreground">Assistant spend today</span>
+          <span className="text-muted-foreground">{t("spendToday")}</span>
           <span className="tnum">
             ${data.studio_spent_usd.toFixed(2)} / ${data.studio_budget_usd.toFixed(2)}
           </span>

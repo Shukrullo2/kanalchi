@@ -124,3 +124,27 @@ def test_markdown_escapes_html_in_the_source():
 def test_markdown_output_survives_sanitising():
     out = markdown_to_telegram_html("**bold** [l](https://a.uz) `c`")
     assert sanitize(out) == out
+
+
+# --- storage-time scrub for the studio editor ------------------------------------------------
+from kanalchi.telegram.formatting import web_safe_html  # noqa: E402
+
+
+def test_web_safe_html_keeps_editor_structure():
+    html = '<div>one<br><p>two <b>bold</b> <a href="https://a.b/c">link</a></p></div>'
+    assert web_safe_html(html) == html
+
+
+def test_web_safe_html_drops_scripts_handlers_and_script_urls():
+    out = web_safe_html(
+        '<div onclick="x()">hi<script>alert(1)</script>'
+        "<img src=x onerror=alert(1)>"
+        '<a href="javascript:alert(1)">j</a>'
+        '<p style="color:red">p</p></div>'
+    )
+    assert out == "<div>hi<a>j</a><p>p</p></div>"
+    assert "script" not in out and "onerror" not in out and "style" not in out
+
+
+def test_web_safe_html_escapes_stray_angle_brackets():
+    assert web_safe_html("a < b && c > d") == "a &lt; b &amp;&amp; c &gt; d"

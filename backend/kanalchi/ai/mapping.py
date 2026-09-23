@@ -114,8 +114,12 @@ async def record_candidate(
                 "sample_post_ids": text(
                     "(array_cat(tag_candidates.sample_post_ids, excluded.sample_post_ids))[1:5]"
                 ),
+                # A spelling already on record is not appended again, or the list would be
+                # eight copies of the same form by the time anyone looked at it.
                 "surface_forms": text(
-                    "(array_cat(tag_candidates.surface_forms, excluded.surface_forms))[1:8]"
+                    "CASE WHEN excluded.surface_forms <@ tag_candidates.surface_forms"
+                    " THEN tag_candidates.surface_forms"
+                    " ELSE (array_cat(tag_candidates.surface_forms, excluded.surface_forms))[1:8] END"
                 ),
             },
         )

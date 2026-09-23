@@ -11,8 +11,20 @@ declare global {
   }
 }
 
-/** Telegram Login Widget → POST /api/auth/telegram. In dev without a bot, shows a dev-login form instead. */
-export function TelegramLogin({ botUsername, dev }: { botUsername: string | null; dev: boolean }) {
+/**
+ * Telegram Login Widget → POST /api/auth/telegram. In dev without a bot, shows a
+ * dev-login form instead — that form stays in English on purpose: it never ships.
+ */
+export function TelegramLogin({
+  botUsername,
+  dev,
+  notConfigured,
+}: {
+  botUsername: string | null;
+  dev: boolean;
+  /** Shown to a real blogger when the host has no login bot. */
+  notConfigured: string;
+}) {
   const router = useRouter();
   const holder = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +89,7 @@ export function TelegramLogin({ botUsername, dev }: { botUsername: string | null
           </button>
         </form>
       ) : null}
-      {!botUsername && !dev ? <p className="text-sm text-muted-foreground">Login bot is not configured for this host.</p> : null}
+      {!botUsername && !dev ? <p className="text-sm text-muted-foreground">{notConfigured}</p> : null}
       {error ? <p className="text-sm" style={{ color: "var(--destructive)" }}>{error}</p> : null}
     </div>
   );

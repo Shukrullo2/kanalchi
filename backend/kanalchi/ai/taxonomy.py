@@ -280,7 +280,11 @@ async def build(tenant_id: int, job_run_id: int | None = None) -> dict[str, Any]
         db.add(version)
         await db.flush()
         version_id, version_no = version.id, version.version_no
-        dim_list = [(d.id, d.key, d.description or d.extraction_hint or d.key) for d in dims]
+        # The model is briefed in English; the reader-facing Uzbek and Russian
+        # lines are not what tells it which candidates belong in a dimension.
+        dim_list = [
+            (d.id, d.key, (d.descriptions or {}).get("en") or d.extraction_hint or d.key) for d in dims
+        ]
 
     proposal: dict[str, Any] = {}
     stats: dict[str, Any] = {}
@@ -405,6 +409,11 @@ async def apply(tenant_id: int, version_id: int, job_run_id: int | None = None) 
                     "ru": proposed.get("label_ru") or canonical,
                     "en": proposed.get("label_en") or canonical,
                 }
+                descriptions = {
+                    lang: (proposed.get(f"description_{lang}") or "").strip()[:500]
+                    for lang in ("uz", "ru", "en")
+                }
+                descriptions = {lang: text for lang, text in descriptions.items() if text}
                 aliases = [a for a in (proposed.get("aliases") or []) if a and a.strip()]
                 aliases += [m for m in (proposed.get("merged_candidates") or []) if m and m.strip()]
 
@@ -417,7 +426,7 @@ async def apply(tenant_id: int, version_id: int, job_run_id: int | None = None) 
                         canonical_name=canonical[:200],
                         canonical_norm=norm,
                         labels=labels,
-                        description=(proposed.get("description") or "")[:500] or None,
+                        descriptions=descriptions,
                         status="active",
                         source="taxonomy",
                         first_seen_version=version_no,
@@ -433,7 +442,7 @@ async def apply(tenant_id: int, version_id: int, job_run_id: int | None = None) 
                             tag = merged_target  # never re-split what a human merged
                     if not tag.is_pinned:  # a pinned tag keeps the name and labels a human chose
                         tag.labels = {**(tag.labels or {}), **labels}
-                        tag.description = (proposed.get("description") or tag.description or "")[:500] or None
+                        tag.descriptions = {**(tag.descriptions or {}), **descriptions}
                     if tag.status == "hidden" and not tag.is_pinned:
                         tag.status = "active"
                     tag.last_seen_version = version_no
@@ -699,3 +708,76 @@ async def orphan_tag_ids(tenant_id: int) -> list[int]:
             )
         ).all()
     return [r[0] for r in rows]
+
+
+async def preview(tenant_id: int, version_id: int) -> dict[str, Any]:
+    """What applying a proposal would do, for a human to read before it does.
+
+    `apply` records a diff only afterwards; this reads the proposal against the tags that
+    exist now, so the console can say "31 new, 212 kept" while the decision is still open.
+    """
+    async with session_scope() as db:
+        version = await db.get(TaxonomyVersion, version_id)
+        if version is None or version.tenant_id != tenant_id:
+            raise RuntimeError("taxonomy version not found")
+        dims = {
+            d.key: d
+            for d in (await db.scalars(select(Dimension).where(Dimension.tenant_id == tenant_id))).all()
+        }
+        known: dict[int, set[str]] = {}
+        for dim_id, norm in (
+            await db.execute(
+                select(Tag.dimension_id, Tag.canonical_norm).where(
+                    Tag.tenant_id == tenant_id, Tag.status.in_(["active", "hidden"])
+                )
+            )
+        ).all():
+            known.setdefault(dim_id, set()).add(norm)
+        for dim_id, norm in (
+            await db.execute(
+                select(Tag.dimension_id, TagAlias.alias_norm)
+                .join(Tag, Tag.id == TagAlias.tag_id)
+                .where(TagAlias.tenant_id == tenant_id)
+            )
+        ).all():
+            known.setdefault(dim_id, set()).add(norm)
+
+        out_dims: list[dict[str, Any]] = []
+        for dim_key, payload in (version.proposal or {}).items():
+            dim = dims.get(dim_key)
+            if dim is None:
+                continue
+            seen = known.get(dim.id, set())
+            new: list[str] = []
+            kept: list[str] = []
+            for proposed in payload.get("tags", []):
+                canonical = (proposed.get("canonical_name") or "").strip()
+                if not canonical:
+                    continue
+                norms = {normalize(canonical)[:200]} | {
+                    normalize(a)[:200]
+                    for a in [*(proposed.get("aliases") or []), *(proposed.get("merged_candidates") or [])]
+                    if a
+                }
+                (kept if norms & seen else new).append(canonical)
+            out_dims.append(
+                {
+                    "key": dim_key,
+                    "labels": dim.labels or {},
+                    "new": new[:200],
+                    "new_count": len(new),
+                    "kept_count": len(kept),
+                    "dropped_count": len(payload.get("dropped_candidates") or []),
+                }
+            )
+        return {
+            "id": version.id,
+            "version_no": version.version_no,
+            "status": version.status,
+            "built_at": version.built_at,
+            "applied_at": version.applied_at,
+            "cost_usd": float(version.cost_usd or 0),
+            "model": version.model,
+            "dimensions": out_dims,
+            "diff": version.diff or {},
+        }

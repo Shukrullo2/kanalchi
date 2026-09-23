@@ -38,7 +38,9 @@ async def _post_rows(tenant_id: int, post_ids: list[int]) -> list[dict[str, Any]
     if not post_ids:
         return []
     async with session_scope() as db:
-        rows = (await db.scalars(select(Post).where(Post.id.in_(post_ids)))).all()
+        rows = (
+            await db.scalars(select(Post).where(Post.id.in_(post_ids), Post.tenant_id == tenant_id))
+        ).all()
         tag_rows = (
             await db.execute(
                 select(PostTag.post_id, Tag.slug)

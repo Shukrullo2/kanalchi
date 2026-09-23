@@ -31,6 +31,13 @@ export async function proxy(req: NextRequest) {
   reqHeaders.delete("x-tenant-slug");
   reqHeaders.delete("x-tenant-lang");
 
+  // Reached only when Next runs without Caddy (local dev): next.config.ts forwards /api/* to
+  // FastAPI, but that proxy replaces the Host header, so the tenant host travels explicitly.
+  if (url.pathname.startsWith("/api/")) {
+    reqHeaders.set("x-tenant-host", host);
+    return NextResponse.next({ request: { headers: reqHeaders } });
+  }
+
   if (host === ADMIN_HOST) {
     if (url.pathname.startsWith("/admin")) return NextResponse.next({ request: { headers: reqHeaders } });
     const u = url.clone();
@@ -55,5 +62,6 @@ export async function proxy(req: NextRequest) {
 export const config = {
   // Everything except Next internals, static files and paths Caddy routes elsewhere.
   // robots.txt / sitemap.xml / feed.xml are tenant-specific, so they must be rewritten too.
-  matcher: ["/((?!_next/|api/|tg/|media/|favicon\\.ico|.*\\.(?:png|jpg|jpeg|svg|webp|ico|css|js|map)$).*)"],
+  // /api/ stays in so the dev fallback above can stamp the tenant host on it.
+  matcher: ["/((?!_next/|tg/|media/|uploads/|favicon\\.ico|.*\\.(?:png|jpg|jpeg|svg|webp|ico|css|js|map)$).*)"],
 };

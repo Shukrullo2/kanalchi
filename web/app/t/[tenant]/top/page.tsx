@@ -1,18 +1,21 @@
 import Link from "next/link";
 import { FlameIcon } from "@/components/Icons";
 import { PostCard } from "@/components/post/PostCard";
-import { getLocale } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { apiFetch } from "@/lib/api";
 import type { PostOut } from "@/lib/types";
 
-export const metadata = { title: "Top posts" };
+export async function generateMetadata() {
+  const t = await getTranslations("top");
+  return { title: t("title") };
+}
 
 const METRICS = ["views", "reactions", "forwards", "engagement"] as const;
 const RANGES = [
-  { days: 30, label: "30d" },
-  { days: 365, label: "1y" },
-  { days: 3650, label: "all" },
-];
+  { days: 30, key: "d30" },
+  { days: 365, key: "y1" },
+  { days: 3650, key: "all" },
+] as const;
 
 type Props = { searchParams: Promise<{ metric?: string; days?: string }> };
 
@@ -20,14 +23,14 @@ export default async function TopPage({ searchParams }: Props) {
   const sp = await searchParams;
   const metric = (METRICS as readonly string[]).includes(sp.metric ?? "") ? sp.metric! : "views";
   const days = Number(sp.days ?? 365);
-  const locale = await getLocale();
+  const [locale, t] = await Promise.all([getLocale(), getTranslations("top")]);
   const data = await apiFetch<{ items: PostOut[] }>(`/api/posts/top?metric=${metric}&days=${days}&limit=20`);
 
   return (
     <div className="space-y-5">
       <header className="flex items-center gap-2">
         <FlameIcon size={18} className="text-primary" />
-        <h1 className="text-[1.75rem] font-semibold tracking-tight">Most read</h1>
+        <h1 className="text-[1.75rem] font-semibold tracking-tight">{t("title")}</h1>
       </header>
 
       <div className="flex flex-wrap gap-3 text-xs">
@@ -40,7 +43,7 @@ export default async function TopPage({ searchParams }: Props) {
                 m === metric ? "bg-surface font-medium shadow-xs" : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {m}
+              {t(m)}
             </Link>
           ))}
         </div>
@@ -53,7 +56,7 @@ export default async function TopPage({ searchParams }: Props) {
                 r.days === days ? "bg-surface font-medium shadow-xs" : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {r.label}
+              {t(r.key)}
             </Link>
           ))}
         </div>

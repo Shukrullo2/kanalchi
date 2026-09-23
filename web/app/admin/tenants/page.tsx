@@ -28,9 +28,11 @@ export default async function TenantsPage() {
       ) : (
         <ul className="rows">
           {tenants.map((x) => {
-            const done = x.channel?.backfill_total_estimate
-              ? Math.min(100, Math.round((x.channel.backfill_checkpoint / x.channel.backfill_total_estimate) * 100))
-              : null;
+            // Posts stored against the estimate; only while the import is still running.
+            const importing =
+              x.channel && x.channel.backfill_status !== "done" && x.channel.backfill_total_estimate
+                ? Math.min(100, Math.round((x.channel.imported / x.channel.backfill_total_estimate) * 100))
+                : null;
             return (
               <li key={x.id} className="row">
                 <span className="row-margin">
@@ -61,14 +63,14 @@ export default async function TenantsPage() {
                     )}
                   </div>
 
-                  {done !== null && done < 100 ? (
+                  {importing !== null ? (
                     <div className="mt-2.5 max-w-xs">
                       <div className="mb-1 flex justify-between text-[0.7rem] text-muted-foreground">
                         <span>Importing history</span>
-                        <span className="tnum">{done}%</span>
+                        <span className="tnum">{importing}%</span>
                       </div>
                       <div className="h-[3px] overflow-hidden rounded-full bg-border">
-                        <div className="h-full rounded-full bg-primary" style={{ width: `${done}%` }} />
+                        <div className="h-full rounded-full bg-primary" style={{ width: `${importing}%` }} />
                       </div>
                     </div>
                   ) : null}

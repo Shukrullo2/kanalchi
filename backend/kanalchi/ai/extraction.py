@@ -113,7 +113,7 @@ async def build_prompt(tenant_id: int) -> tuple[list[dict[str, Any]], str]:
         channel = await db.scalar(select(Channel).where(Channel.tenant_id == tenant_id))
         custom_dims = (
             await db.execute(
-                select(Dimension.key, Dimension.extraction_hint, Dimension.description)
+                select(Dimension.key, Dimension.extraction_hint, Dimension.descriptions)
                 .where(
                     Dimension.tenant_id == tenant_id,
                     Dimension.is_universal.is_(False),
@@ -125,7 +125,9 @@ async def build_prompt(tenant_id: int) -> tuple[list[dict[str, Any]], str]:
         digest = await _taxonomy_digest(db, tenant_id)
 
     profile = (tenant.settings or {}).get("channel_profile")
-    dims = [{"key": k, "extraction_hint": h, "description": d} for k, h, d in custom_dims]
+    dims = [
+        {"key": k, "extraction_hint": h, "description": (d or {}).get("en", "")} for k, h, d in custom_dims
+    ]
     stable = prompts.extraction_system(profile, dims)
     blocks = system_blocks(stable, digest) if digest else system_blocks(stable)
     return blocks, (channel.title if channel else (tenant.title or ""))
@@ -190,9 +192,12 @@ async def pending_extract_ids(tenant_id: int, limit: int = BATCH_SIZE) -> list[i
     genuine re-extraction is a separate, explicit operation.
     """
     async with session_scope() as db:
+        # Refused, invalid and errored are terminal too: re-submitting them on every pass
+        # would spend the same money to get the same answer, and the reconciler passes
+        # every ten minutes. A re-extraction is an explicit operation, not a retry.
         done = select(Extraction.post_id).where(
             Extraction.tenant_id == tenant_id,
-            Extraction.status.in_(["succeeded", "submitted", "queued"]),
+            Extraction.status.in_(["succeeded", "submitted", "queued", "refused", "invalid", "errored"]),
         )
         return list(
             (

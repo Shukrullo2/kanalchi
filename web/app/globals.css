@@ -421,22 +421,148 @@
   @media (min-width: 72rem) { .archive-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 
   /* --- The index as a cloud of words ---------------------------------------
-     Laid out on the server (see `lib/wordcloud.ts`) and drawn as SVG, so the
-     words are real links and there is nothing to run in the browser.
+     `lib/wordcloud.ts` packs the words; each is placed here at its share of the
+     box and sized in `cqw`, so the cloud scales with its container without
+     anything being re-measured in the browser.
 
      Weight drives both size and colour: a subject the channel keeps returning
      to is set large in its group's tone, one mentioned twice recedes to grey.
-     The text itself carries no box — a cloud is words, and a border round each
-     one turns it back into a grid of buttons. */
-  .tag-cloud {
-    display: block;
+     No borders and no plates — a box round each word turns a cloud back into a
+     grid of buttons. */
+  /* The tone belongs to the cloud, not to each word: a cloud is a single group,
+     so every word in it shares one colour. The group's own tint is mixed a
+     quarter of the way in, which is enough that moving between tabs visibly
+     changes the colour while every cloud stays recognisably its tier's — and
+     stays whatever that token means in the current theme. */
+  .tag-cloud-packed,
+  .tag-cloud-flow {
+    --tier-tone: var(--muted-foreground);
+    --tone: color-mix(in oklab, var(--tier-tone) 75%, var(--dim-tint, var(--tier-tone)));
+  }
+  .tag-cloud-packed[data-tier="theme"],
+  .tag-cloud-flow[data-tier="theme"] {
+    --tier-tone: var(--primary);
+  }
+  .tag-cloud-packed[data-tier="entity"],
+  .tag-cloud-flow[data-tier="entity"] {
+    --tier-tone: var(--accent);
+  }
+
+  .tag-cloud-packed {
+    container-type: inline-size;
+    position: relative;
     width: 100%;
-    height: auto;
-    overflow: visible;
     font-family: var(--font-sans);
     font-weight: 700;
     letter-spacing: -0.015em;
   }
+
+  .cloud-word {
+    --w: 0;
+    position: absolute;
+    translate: -50% -50%;
+    white-space: nowrap;
+    line-height: 1;
+    /* A plain colour first, so a browser without `color-mix` still gets a
+       readable cloud, just without the gradient of emphasis. */
+    color: var(--muted-foreground);
+    color: color-mix(in oklab, var(--tone) calc(22% + var(--w) * 78%), var(--muted-foreground));
+    transition: color 0.16s, opacity 0.16s;
+  }
+
+  /* Hovering one word dims the rest. On a field of fifty names a colour change
+     alone is easy to miss; taking the others back makes the one under the
+     cursor unmistakable, and shows what is about to be clicked. */
+  .tag-cloud-packed:hover .cloud-word {
+    opacity: 0.32;
+  }
+  /* Lifts the hovered word above its neighbours — but only within the cloud.
+     `container-type` on the cloud applies layout containment, which makes it a
+     stacking context of its own at z-index auto, so no z-index in here can
+     reach past it. That is why the tooltip opens downwards; see below. */
+  .tag-cloud-packed .cloud-word:hover,
+  .tag-cloud-packed .cloud-word:focus-visible {
+    opacity: 1;
+    z-index: 40;
+    color: var(--foreground);
+  }
+  .cloud-word-text {
+    display: inline-block;
+    transition: scale 0.16s;
+  }
+  .cloud-word:hover .cloud-word-text,
+  .cloud-word:focus-visible .cloud-word-text {
+    scale: 1.08;
+  }
+  .cloud-word:focus-visible {
+    outline: 2px solid var(--tone);
+    outline-offset: 3px;
+    border-radius: 0.2rem;
+  }
+
+  /* The tooltip is set in rem, not in `cqw` like the word it belongs to: it is
+     a caption and should read the same size whichever word raised it. */
+  .cloud-tip {
+    position: absolute;
+    /* Downwards, always. Opening upwards put the tooltip behind the sticky
+       group tabs, and no z-index can fix that: the cloud is a stacking context
+       (see above), so everything in it paints below the tabs. Nor would it be
+       enough to flip only the words near the top of the cloud, because any word
+       can be scrolled to sit just under the tabs. Downwards there is nothing
+       fixed to collide with. */
+    top: calc(100% + 0.5rem);
+    left: 50%;
+    translate: -50% 0;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    width: max-content;
+    max-width: 17rem;
+    padding: 0.55rem 0.7rem;
+    border-radius: 0.6rem;
+    border: 1px solid var(--border-strong);
+    background: var(--surface-2);
+    box-shadow: var(--shadow-md);
+    font-family: var(--font-sans);
+    font-weight: 500;
+    letter-spacing: 0;
+    white-space: normal;
+    text-align: left;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.14s, visibility 0.14s;
+  }
+  .cloud-word:hover .cloud-tip,
+  .cloud-word:focus-visible .cloud-tip {
+    opacity: 1;
+    visibility: visible;
+  }
+  .cloud-tip-text {
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    color: var(--foreground);
+  }
+  /* The same three figures the tag's own page opens with, set small and on one
+     line: the number carries the weight, the unit stays out of its way. */
+  .cloud-tip-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.1rem 0.7rem;
+    margin-top: 0.1rem;
+  }
+  .cloud-tip-stat {
+    font-size: 0.75rem;
+    line-height: 1.4;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+  }
+  .cloud-tip-stat b {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--tone);
+  }
+
   /* Exactly one of the two clouds is ever shown; see the note in TagCloud. */
   .tag-cloud-packed {
     display: none;
@@ -465,7 +591,6 @@
   }
   .flow-word {
     --w: 0;
-    --tone: var(--muted-foreground);
     font-weight: 700;
     line-height: 1.3;
     letter-spacing: -0.015em;
@@ -474,79 +599,6 @@
     overflow-wrap: anywhere;
     color: var(--muted-foreground);
     color: color-mix(in oklab, var(--tone) calc(22% + var(--w) * 78%), var(--muted-foreground));
-  }
-  .flow-word[data-tier="theme"] {
-    --tone: var(--primary);
-  }
-  .flow-word[data-tier="entity"] {
-    --tone: var(--accent);
-  }
-
-  .cloud-word {
-    --w: 0;
-    --tone: var(--muted-foreground);
-    /* A plain colour first, so a browser without `color-mix` still gets a
-       readable cloud, just without the gradient of emphasis. */
-    fill: var(--muted-foreground);
-    fill: color-mix(in oklab, var(--tone) calc(22% + var(--w) * 78%), var(--muted-foreground));
-    transition: fill 0.18s;
-    cursor: pointer;
-  }
-  .cloud-word[data-tier="theme"] {
-    --tone: var(--primary);
-  }
-  .cloud-word[data-tier="entity"] {
-    --tone: var(--accent);
-  }
-  .cloud-word:hover {
-    fill: var(--foreground);
-  }
-  .cloud-word:focus-visible {
-    outline: 2px solid var(--tone);
-    outline-offset: 2px;
-    border-radius: 0.2rem;
-  }
-
-  /* --- The channel index ---------------------------------------------------
-     A ranked finding aid: the subject, a rule under it showing how much of the
-     archive it covers, and the count at the far end. The rule is the measure —
-     a filled row would read as a selected row, and nothing here is selected. */
-  .index-row {
-    position: relative;
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 1.25rem;
-    padding: 0.35rem 0 0.5rem;
-    font-size: 0.9375rem;
-  }
-  .index-row::after {
-    content: "";
-    position: absolute;
-    left: 0;
-    bottom: 0.15rem;
-    height: 2px;
-    width: var(--weight, 0%);
-    background: var(--tone, var(--primary));
-    opacity: 0.5;
-    border-radius: 2px;
-    transition: opacity 0.15s;
-  }
-  .index-row:hover::after { opacity: 1; }
-  .index-row:hover .index-name { color: var(--foreground); }
-  .index-row[data-tier="entity"] { --tone: var(--accent); }
-  .index-name {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    transition: color 0.15s;
-  }
-  .index-count {
-    flex: none;
-    font-size: 0.8125rem;
-    font-variant-numeric: tabular-nums;
-    color: var(--muted-foreground);
   }
 
   /* --- Tags ---------------------------------------------------------------
@@ -781,6 +833,31 @@
   .nav-tab { padding-bottom: 0.7rem; }
   .nav-tab[data-active="true"]::after { bottom: -1px; }
 
+  /* How far down the page the floating header reaches: the 0.75rem it is held
+     off the top by, its own 0.55rem of padding twice, the tallest thing in it
+     and its border — 67.6px at the widest it gets. Anything else that pins
+     itself stops here, rounded up, so the two never overlap. */
+  .shell { --header-h: 4.25rem; }
+
+  /* A strip that sticks under the header instead of scrolling away: the index's
+     group tabs, so a long word cloud never costs you the way back to the other
+     groups. It bleeds to the shell's edges so words pass behind it, not beside
+     it, and wears the same blur as the header for the same reason. */
+  .sticky-tabs {
+    position: sticky;
+    top: var(--header-h, 4.25rem);
+    z-index: 30;
+    margin-inline: -1rem;
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--border);
+    background: color-mix(in srgb, var(--background) 88%, transparent);
+    backdrop-filter: saturate(160%) blur(12px);
+    -webkit-backdrop-filter: saturate(160%) blur(12px);
+  }
+  @media (min-width: 40rem) {
+    .sticky-tabs { margin-inline: -1.5rem; padding-inline: 1.5rem; }
+  }
+
   /* The floating header bar from the reference: a rounded panel that sits a
      little off the page, so scrolling content passes under it. */
   .topbar {
@@ -864,6 +941,136 @@
       animation-duration: 0.01ms !important;
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* ---------------------------------------------------------------- stories
+     Titles down the left, the story you picked on the right. Below the
+     breakpoint there is no room for both, so the two become two screens: the
+     list is what /stories shows, and picking one replaces it. */
+  .stories-shell {
+    display: grid;
+    gap: 1.75rem;
+  }
+  .stories-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+  }
+
+  .stories-side ol {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+  .stories-side-item {
+    display: block;
+    padding: 0.5rem 0.7rem;
+    border-radius: 0.5rem;
+    border-left: 2px solid transparent;
+    font-size: 0.9375rem;
+    line-height: 1.35;
+    color: var(--muted-foreground);
+    transition:
+      background 0.12s ease,
+      color 0.12s ease;
+  }
+  .stories-side-item:hover {
+    background: var(--surface);
+    color: var(--foreground);
+  }
+  .stories-side-item[data-active="true"] {
+    background: var(--surface);
+    border-left-color: var(--primary);
+    color: var(--foreground);
+    font-weight: 600;
+  }
+
+  /* One line per post, oldest first, hung off a single rule so the run of
+     coverage reads as one shape rather than as a stack of cards. */
+  .timeline {
+    position: relative;
+    margin-left: 0.3125rem;
+    padding-left: 1.4rem;
+    border-left: 1px solid var(--border-strong);
+  }
+  .timeline-item {
+    position: relative;
+    padding: 0.55rem 0;
+  }
+  .timeline-item::before {
+    content: "";
+    position: absolute;
+    left: calc(-1.4rem - 0.5px);
+    top: 1.05rem;
+    width: 0.4375rem;
+    height: 0.4375rem;
+    margin-left: -0.21875rem;
+    border-radius: 50%;
+    background: var(--border-strong);
+  }
+  .timeline-item:hover::before {
+    background: var(--primary);
+  }
+  .timeline-date {
+    display: block;
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted-foreground);
+  }
+  .timeline-title {
+    display: block;
+    margin-top: 0.125rem;
+    font-size: 0.9375rem;
+    line-height: 1.4;
+    text-wrap: pretty;
+  }
+  .timeline-title:hover {
+    color: var(--primary);
+  }
+
+  @media (max-width: 63.999rem) {
+    .stories-shell[data-detail="true"] .stories-side,
+    .stories-shell[data-detail="false"] .stories-main {
+      display: none;
+    }
+  }
+  @media (min-width: 64rem) {
+    .stories-shell {
+      grid-template-columns: 17.5rem minmax(0, 1fr);
+      align-items: start;
+    }
+    /* The list keeps its own scroll so a forty-story index never pushes the
+       story itself off the screen. */
+    .stories-side {
+      position: sticky;
+      top: calc(var(--header-h, 4.25rem) + 1rem);
+      max-height: calc(100vh - var(--header-h, 4.25rem) - 2rem);
+      overflow-y: auto;
+      padding-right: 0.35rem;
+    }
+    .stories-back {
+      display: none;
+    }
+  }
+}
+
+@layer components {
+  /* The list is the whole screen on a phone, so it needs its own heading; on a
+     desktop the page beside it already carries one. */
+  .stories-side-heading {
+    margin-bottom: 0.75rem;
+    font-size: 1.5rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  @media (min-width: 64rem) {
+    .stories-side-heading {
+      display: none;
     }
   }
 }

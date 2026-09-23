@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { ExternalIcon, EyeIcon, ShareIcon } from "@/components/Icons";
 import { compactNumber, fullDate } from "@/lib/format";
 import { linkLabel } from "@/lib/links";
@@ -10,7 +11,7 @@ import { PostEntry } from "./PostEntry";
  * — a post is a row in the register, so this delegates and only the single-post
  * view is written out here.
  */
-export function PostCard({
+export async function PostCard({
   post,
   locale,
   full = false,
@@ -23,6 +24,7 @@ export function PostCard({
 }) {
   if (!full) return <PostEntry post={post} locale={locale} rank={rank} />;
 
+  const t = await getTranslations("post");
   const body = post.html ?? post.text;
   const reactions = post.reactions.filter((r) => r.emoji).slice(0, 6);
 
@@ -45,7 +47,7 @@ export function PostCard({
           </span>
         ) : null}
         {post.is_deleted ? (
-          <span style={{ color: "var(--destructive)" }}>deleted in Telegram</span>
+          <span style={{ color: "var(--destructive)" }}>{t("deleted")}</span>
         ) : null}
         <a
           href={post.url}
@@ -53,20 +55,22 @@ export function PostCard({
           rel="noreferrer"
           className="link-quiet ml-auto flex items-center gap-1.5"
         >
-          Open in Telegram
+          {t("openTelegram")}
           <ExternalIcon size={12} />
         </a>
       </div>
 
       {post.forward_from ? (
         <p className="mt-4 text-sm text-muted-foreground">
-          forwarded from {post.forward_from.title ?? post.forward_from.username ?? "a channel"}
+          {t("forwardedFrom", {
+            name: post.forward_from.title ?? post.forward_from.username ?? t("unnamedChannel"),
+          })}
         </p>
       ) : null}
 
       {post.media.length > 0 ? (
         <div className="mt-5">
-          <MediaGallery media={post.media} />
+          <MediaGallery media={post.media} labels={{ open: t("openTelegram"), file: t("file") }} />
         </div>
       ) : null}
 
@@ -99,7 +103,7 @@ export function PostCard({
           </ul>
           {post.poll.total_voters ? (
             <p className="mt-2 text-xs text-muted-foreground">
-              {compactNumber(post.poll.total_voters)} voted
+              {t("voted", { count: compactNumber(post.poll.total_voters) })}
             </p>
           ) : null}
         </div>

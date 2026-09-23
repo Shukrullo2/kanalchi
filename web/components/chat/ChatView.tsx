@@ -14,6 +14,9 @@ type Labels = {
   thinking: string;
   disabled: string;
   sources: string;
+  failed: string;
+  unavailable: string;
+  wrong: string;
 };
 
 export function ChatView({
@@ -64,12 +67,13 @@ export function ChatView({
 
     const sessionId = await ensureSession();
     if (!sessionId) {
-      setTurns((prev) => patchLast(prev, { pending: false, error: "Could not start a chat session." }));
+      setTurns((prev) => patchLast(prev, { pending: false, error: labels.failed }));
       setBusy(false);
       return;
     }
 
     await streamTurn(sessionId, question, {
+      fallbacks: { unavailable: labels.unavailable, wrong: labels.wrong },
       onDelta: (chunk) => setTurns((prev) => patchLast(prev, { content: lastContent(prev) + chunk })),
       onTool: (name) => setTool(name),
       onCitations: (cards: ChatCitation[]) => setTurns((prev) => patchLast(prev, { cards })),

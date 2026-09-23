@@ -17,15 +17,33 @@ async def ping(payload: str = "pong") -> str:
 
 
 @app.task(queue="publish", name="publish.draft", retry=0)
-async def publish(draft_id: int) -> dict[str, Any]:
+async def publish(draft_id: int, scheduled_at: str | None = None) -> dict[str, Any]:
     """Send one draft. Retries are handled inside, so the job itself never retries blindly:
-    re-sending a post that already went out would double-post to the channel."""
+    re-sending a post that already went out would double-post to the channel.
+
+    `scheduled_at` is the schedule this job was queued for; the draft row is the source of
+    truth, and a job whose schedule no longer matches it does nothing."""
     from kanalchi.telegram.publish import publish_draft
 
-    result = await publish_draft(draft_id)
+    result = await publish_draft(draft_id, scheduled_at=scheduled_at)
     if result.get("failed"):
         await notify_failure.defer_async(draft_id=draft_id)
     return result
+
+
+@app.task(queue="publish", name="publish.file_tags", retry=0)
+async def file_tags(draft_id: int, attempt: int = 0) -> dict[str, Any]:
+    """Once the listener has stored the post the bot sent, file it under the tags the
+    assistant suggested. The post usually lands within seconds; this waits up to ~15 minutes."""
+    from kanalchi.telegram.publish import file_suggested_tags
+
+    filed = await file_suggested_tags(draft_id)
+    if filed is None and attempt < 5:
+        await file_tags.configure(schedule_in={"seconds": 60 * (attempt + 1)}).defer_async(
+            draft_id=draft_id, attempt=attempt + 1
+        )
+        return {"waiting": attempt + 1}
+    return {"filed": filed or 0}
 
 
 @app.task(queue="notify", name="notify.publish_failed", retry=1)

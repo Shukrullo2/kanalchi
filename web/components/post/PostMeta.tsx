@@ -1,10 +1,12 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { ExternalIcon, EyeIcon, ShareIcon } from "@/components/Icons";
 import { compactNumber, fullDate, postDate } from "@/lib/format";
 import type { PostOut } from "@/lib/types";
 
 /** Server component on purpose: dates are formatted once, on the server, where full ICU data lives. */
-export function PostMeta({ post, locale }: { post: PostOut; locale: string }) {
+export async function PostMeta({ post, locale }: { post: PostOut; locale: string }) {
+  const t = await getTranslations("post");
   const reactions = post.reactions.filter((r) => r.emoji).slice(0, 4);
   return (
     <div className="meta-row mt-3">
@@ -41,12 +43,12 @@ export function PostMeta({ post, locale }: { post: PostOut; locale: string }) {
 
       {post.is_deleted ? (
         <span className="chip" style={{ color: "var(--destructive)" }}>
-          deleted in Telegram
+          {t("deleted")}
         </span>
       ) : null}
 
       <a href={post.url} target="_blank" rel="noreferrer" className="link-quiet ml-auto flex items-center gap-1">
-        Telegram
+        {t("telegram")}
         <ExternalIcon size={12} />
       </a>
     </div>

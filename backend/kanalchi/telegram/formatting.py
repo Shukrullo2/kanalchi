@@ -103,6 +103,72 @@ def _escape_attr(value: str) -> str:
     return value.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+# What the studio editor produces (contenteditable + execCommand) on top of Telegram's set:
+# block wrappers and lists that `sanitize()` folds away at publish time but that the editor
+# needs intact to round-trip a draft. Nothing here can carry script.
+_WEB_TAGS = ALLOWED_TAGS | {"div", "p", "ul", "ol", "li", "font"}
+_DANGEROUS_CONTENT = {"script", "style", "iframe", "object", "embed", "svg", "math", "template"}
+
+
+class _WebScrubber(HTMLParser):
+    """Removes anything executable from editor HTML while keeping its structure."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=False)
+        self.out: list[str] = []
+        self._skip = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in _DANGEROUS_CONTENT:
+            self._skip += 1
+            return
+        if self._skip or tag not in _WEB_TAGS:
+            return
+        kept: list[str] = []
+        for name, value in attrs:
+            if value is None:
+                continue
+            if name == "href" and tag == "a":
+                if value.strip().lower().startswith(SAFE_SCHEMES):
+                    kept.append(f'href="{_escape_attr(value)}"')
+            elif name == "class":
+                kept.append(f'class="{_escape_attr(value)}"')
+        attr_text = " " + " ".join(kept) if kept else ""
+        self.out.append(f"<{tag}{attr_text}>" if tag != "br" else "<br>")
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in _DANGEROUS_CONTENT:
+            self._skip = max(0, self._skip - 1)
+            return
+        if self._skip or tag not in _WEB_TAGS or tag == "br":
+            return
+        self.out.append(f"</{tag}>")
+
+    def handle_data(self, data: str) -> None:
+        if not self._skip:
+            self.out.append(data.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+
+    def handle_entityref(self, name: str) -> None:
+        if not self._skip:
+            self.out.append(f"&{name};")
+
+    def handle_charref(self, name: str) -> None:
+        if not self._skip:
+            self.out.append(f"&#{name};")
+
+
+def web_safe_html(html: str | None) -> str:
+    """Storage-time scrub for draft HTML: keeps the editor's markup, drops scripts, event
+    handlers, inline styles and javascript: links. `validate()` still runs at publish time."""
+    parser = _WebScrubber()
+    parser.feed(html or "")
+    parser.close()
+    return "".join(parser.out)
+
+
 def sanitize(html: str) -> str:
     """Strip a draft down to the markup Telegram accepts. Input comes from a browser, so never trust it."""
     parser = _Sanitizer()

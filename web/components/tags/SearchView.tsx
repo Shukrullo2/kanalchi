@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CloseIcon, SearchIcon } from "@/components/Icons";
-import { PostCard } from "@/components/post/PostCard";
+import { PostEntry } from "@/components/post/PostEntry";
 import { tagLabel } from "@/lib/labels";
 import type { SearchResult } from "@/lib/types";
 import { toneVar } from "@/lib/dimensions";
@@ -14,10 +14,22 @@ export function SearchView({
   initial,
   locale,
   labels,
+  groups,
+  tagNames,
 }: {
   initial: SearchResult;
   locale: string;
-  labels: { search: string; nothing: string; sortBy: string; clear: string };
+  /** Dimension key -> the group's name in the reader's language, for the facet headings. */
+  groups: Record<string, string>;
+  /** Slug -> tag name, for the filter chips, which the URL only gives us as slugs. */
+  tagNames: Record<string, string>;
+  labels: {
+    search: string;
+    nothing: string;
+    sortBy: string;
+    clear: string;
+    sorts: Record<(typeof SORTS)[number], string>;
+  };
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -77,7 +89,7 @@ export function SearchView({
                 s === sort ? "bg-surface font-medium shadow-xs" : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {s}
+              {labels.sorts[s]}
             </button>
           ))}
         </div>
@@ -92,7 +104,7 @@ export function SearchView({
         <div className="flex flex-wrap gap-1.5">
           {activeTags.map((slug) => (
             <button key={slug} onClick={() => toggleTag(slug)} className="tag-pill" data-active="true">
-              {slug}
+              {tagNames[slug] ?? slug}
               <CloseIcon size={11} />
             </button>
           ))}
@@ -106,7 +118,7 @@ export function SearchView({
           ) : (
             <div className="archive-grid">
               {initial.items.map((p) => (
-                <PostCard key={p.id} post={p} locale={locale} />
+                <PostEntry key={p.id} post={p} locale={locale} />
               ))}
             </div>
           )}
@@ -122,7 +134,7 @@ export function SearchView({
                     style={{ background: toneVar(dimension) }}
                     aria-hidden
                   />
-                  {dimension}
+                  {groups[dimension] ?? dimension}
                 </div>
                 <ul className="space-y-0.5">
                   {tags.slice(0, 8).map((t) => (

@@ -44,7 +44,11 @@ async def widget_info(ctx: TenantContext = Depends(get_tenant_ctx)) -> dict:
         if s.platform_bot_token:
             bot = (await _bot_username(s.platform_bot_token)) or None
         return {"mode": "admin", "bot_username": bot}
-    return {"mode": "studio", "bot_username": ctx.tenant.bot_username if ctx.tenant else None}
+    bot = ctx.tenant.bot_username if ctx.tenant else None
+    if bot is None and s.platform_bot_token:
+        # A channel without a bot of its own signs its bloggers in through the platform bot.
+        bot = (await _bot_username(s.platform_bot_token)) or None
+    return {"mode": "studio", "bot_username": bot, "own_bot": bool(ctx.tenant and ctx.tenant.bot_username)}
 
 
 async def _bot_username(token: str) -> str | None:
@@ -70,6 +74,7 @@ async def telegram_login(
         bot_token = s.platform_bot_token
     else:
         bot_token = decrypt(ctx.tenant.bot_token_enc) if ctx.tenant and ctx.tenant.bot_token_enc else None
+        bot_token = bot_token or s.platform_bot_token  # no bot of its own: the platform bot signs the widget
     if not bot_token:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE, detail="login bot not configured for this host"
@@ -118,13 +123,17 @@ async def telegram_login(
             and member.verified_admin_at is not None
             and member.verified_admin_at > now - timedelta(days=7)
         )
-        if not fresh:
+        # An invited member was vouched for by an admin or the owner; Telegram is not asked.
+        if not fresh and not (member is not None and member.invited):
             from kanalchi.telegram.verify import is_channel_admin
 
             channel = ctx.tenant.channel
             ok = channel is not None and await is_channel_admin(bot_token, channel.tg_channel_id, payload.id)
             if not ok:
-                raise HTTPException(status.HTTP_403_FORBIDDEN, detail="you are not an admin of this channel")
+                hint = "" if ctx.tenant.bot_token_enc else " (this channel has no bot; ask to be invited)"
+                raise HTTPException(
+                    status.HTTP_403_FORBIDDEN, detail=f"you are not an admin of this channel{hint}"
+                )
             if member is None:
                 member = TenantMember(tenant_id=ctx.tenant.id, user_id=user_id, role="owner")
                 db.add(member)

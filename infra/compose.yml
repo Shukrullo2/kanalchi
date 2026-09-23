@@ -1,22 +1,27 @@
 name: kanalchi
 
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "20m", max-file: "5" }
+
 x-backend: &backend
   build:
     context: ../backend
   env_file: .env
   environment:
+    APP_ENV: ${APP_ENV:-prod}
     DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     REDIS_URL: redis://redis:6379/0
     S3_ENDPOINT: http://minio:9000
     S3_ACCESS_KEY: ${MINIO_ROOT_USER}
     S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
   restart: unless-stopped
-  logging:
-    driver: json-file
-    options: { max-size: "20m", max-file: "5" }
+  logging: *logging
 
 x-backend-deps: &backend-deps
   migrate:
+    condition: service_completed_successfully
+  minio-init:
     condition: service_completed_successfully
   redis:
     condition: service_healthy
@@ -25,9 +30,12 @@ x-backend-deps: &backend-deps
 
 services:
   caddy:
+    logging: *logging
     image: caddy:2
     ports: ["80:80", "443:443", "443:443/udp"]
-    env_file: .env
+    environment:
+      ADMIN_HOST: ${ADMIN_HOST}
+      ACME_EMAIL: ${ACME_EMAIL}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -37,6 +45,7 @@ services:
     deploy: { resources: { limits: { memory: 128M } } }
 
   web:
+    logging: *logging
     build:
       context: ../web
     environment:
@@ -87,8 +96,12 @@ services:
       postgres: { condition: service_healthy }
 
   postgres:
+    logging: *logging
     image: pgvector/pgvector:pg17
-    env_file: .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     command: postgres -c config_file=/etc/postgresql/postgresql.conf
     volumes:
       - pg_data:/var/lib/postgresql/data
@@ -144,12 +157,17 @@ services:
     restart: "no"
 
   backup:
+    logging: *logging
     build:
       context: ./backup
-    env_file: .env
     environment:
       PGHOST: postgres
       S3_ENDPOINT: http://minio:9000
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     depends_on:
       postgres: { condition: service_healthy }
       minio: { condition: service_healthy }

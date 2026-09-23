@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getLocale } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { ArrowLeftIcon, ArrowRightIcon } from "@/components/Icons";
 import { PostCard } from "@/components/post/PostCard";
 import { TagChip } from "@/components/tags/TagChip";
 import { byTier, tierOf } from "@/lib/dimensions";
 import { apiFetchOrNull } from "@/lib/api";
 import { postDate } from "@/lib/format";
+import { isoDay } from "@/lib/graph";
 import type { PostOut, TagOut, TenantPublic } from "@/lib/types";
 
 type Props = { params: Promise<{ id: string }> };
@@ -22,7 +23,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     apiFetchOrNull<PostOut>(`/api/posts/${id}`),
     apiFetchOrNull<TenantPublic>("/api/tenant"),
   ]);
-  if (!post) return { title: "Not found" };
+  if (!post) return { title: (await getTranslations("post"))("notFound") };
   const description = post.summary ?? plain(post.html, post.text).slice(0, 200);
   const image = post.media.find((m) => m.thumb_url || m.url)?.thumb_url ?? undefined;
   return {
@@ -40,12 +41,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function PostPage({ params }: Props) {
   const { id } = await params;
-  const [post, tenant, tags, related, locale] = await Promise.all([
+  const [post, tenant, tags, related, locale, t, g] = await Promise.all([
     apiFetchOrNull<PostOut>(`/api/posts/${id}`),
     apiFetchOrNull<TenantPublic>("/api/tenant"),
     apiFetchOrNull<TagOut[]>(`/api/posts/${id}/tags`),
     apiFetchOrNull<{ items: PostOut[] }>(`/api/posts/${id}/related?limit=4`),
     getLocale(),
+    getTranslations("post"),
+    getTranslations("graph"),
   ]);
   if (!post) notFound();
 
@@ -60,6 +63,9 @@ export default async function PostPage({ params }: Props) {
   };
 
   const subjects = tags ? byTier(tags).filter((t) => tierOf(t.dimension) !== "meta") : [];
+  // The map around this post: a fortnight either side, which is where its replies and citations live.
+  const posted = Date.parse(post.date);
+  const mapHref = `/graph?from=${isoDay(posted - 14 * 86_400_000)}&to=${isoDay(posted + 14 * 86_400_000)}`;
   const filing = tags ? tags.filter((t) => tierOf(t.dimension) === "meta") : [];
 
   return (
@@ -70,7 +76,12 @@ export default async function PostPage({ params }: Props) {
 
       {subjects.length > 0 ? (
         <section className="mt-8 border-t pt-4">
-          <h2 className="mb-2.5 text-sm text-muted-foreground">Indexed under</h2>
+          <div className="mb-2.5 flex items-baseline justify-between gap-3">
+            <h2 className="text-sm text-muted-foreground">{t("indexedUnder")}</h2>
+            <Link href={mapHref} className="link-quiet text-xs">
+              {g("openInMap")} →
+            </Link>
+          </div>
           <div className="flex flex-wrap gap-1.5">
             {subjects.map((tag) => (
               <TagChip key={tag.slug} tag={tag} locale={locale} />
@@ -88,7 +99,7 @@ export default async function PostPage({ params }: Props) {
 
       {related && related.items.length > 0 ? (
         <section className="mt-8 border-t pt-4">
-          <h2 className="mb-2.5 text-sm text-muted-foreground">Close to this in the archive</h2>
+          <h2 className="mb-2.5 text-sm text-muted-foreground">{t("related")}</h2>
           <ul className="space-y-0.5">
             {related.items.map((r) => (
               <li key={r.id}>
@@ -112,14 +123,14 @@ export default async function PostPage({ params }: Props) {
       <nav className="mt-10 flex justify-between gap-3 border-t pt-5 text-sm">
         {post.prev_id ? (
           <Link href={`/post/${post.prev_id}`} className="link-quiet flex items-center gap-1.5">
-            <ArrowLeftIcon size={14} /> Earlier post
+            <ArrowLeftIcon size={14} /> {t("earlier")}
           </Link>
         ) : (
           <span />
         )}
         {post.next_id ? (
           <Link href={`/post/${post.next_id}`} className="link-quiet flex items-center gap-1.5">
-            Later post <ArrowRightIcon size={14} />
+            {t("later")} <ArrowRightIcon size={14} />
           </Link>
         ) : (
           <span />

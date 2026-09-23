@@ -12,5 +12,11 @@ export default async function DraftPage({ params }: Props) {
     apiFetchOrNull<StudioSettings>("/api/studio/settings"),
   ]);
   if (!draft) notFound();
-  return <DraftEditor initial={draft} botUsername={settings?.bot_username ?? null} />;
+  return (
+    <DraftEditor
+      initial={draft}
+      botUsername={settings?.bot_username ?? null}
+      channelUsername={settings?.channel_username ?? null}
+    />
+  );
 }

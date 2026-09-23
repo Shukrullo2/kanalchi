@@ -22,7 +22,7 @@ def tag_out(tag: Tag, dimension_key: str | None = None) -> dict[str, Any]:
         "slug": tag.slug,
         "name": tag.canonical_name,
         "labels": tag.labels or {},
-        "description": tag.description,
+        "descriptions": tag.descriptions or {},
         "dimension": dimension_key,
         "post_count": tag.post_count,
         "engagement_score": round(tag.engagement_score or 0, 2),
@@ -40,7 +40,7 @@ async def _posts_by_ids(db: AsyncSession, tenant: Tenant, ids: list[int]) -> lis
     channel = await _channel(db, tenant)
     if channel is None:
         return []
-    rows = (await db.scalars(select(Post).where(Post.id.in_(ids)))).all()
+    rows = (await db.scalars(select(Post).where(Post.id.in_(ids), Post.tenant_id == tenant.id))).all()
     by_id = {p.id: p for p in rows}
     ordered = [by_id[i] for i in ids if i in by_id]
     media_by, links_by = await attach_media_links(db, ordered)
@@ -70,7 +70,7 @@ async def list_dimensions(
         {
             "key": d.key,
             "labels": d.labels or {},
-            "description": d.description,
+            "descriptions": d.descriptions or {},
             "kind": d.kind,
             "tag_count": count,
         }
@@ -102,8 +102,10 @@ async def list_tags(
     if q:
         from kanalchi.text.normalize import normalize
 
-        stmt = stmt.where(Tag.canonical_norm.like(f"%{normalize(q)}%"))
+        needle = normalize(q).replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        stmt = stmt.where(Tag.canonical_norm.like(f"%{needle}%", escape="\\"))
     rows = (await db.execute(stmt.order_by(Tag.post_count.desc()).limit(limit))).all()
+    spans = await tag_spans(db, [t.id for t, _ in rows])
     return [
         {
             **tag_out(t, key),
@@ -112,9 +114,33 @@ async def list_tags(
             # leave a tag without one than give it a scan of a document.
             "thumb_url": (f"/media/{t.image_key}" if t.image_key else None),
             "image_source": t.image_source,
+            "first_post_at": spans.get(t.id, (None, None))[0],
+            "last_post_at": spans.get(t.id, (None, None))[1],
         }
         for t, key in rows
     ]
+
+
+async def tag_spans(
+    db: AsyncSession, tag_ids: list[int]
+) -> dict[int, tuple[datetime | None, datetime | None]]:
+    """First and last post for each tag, in one query rather than one per tag.
+
+    The detail page asks this of a single tag; the index asks it of five hundred
+    at once, so it is grouped. Without this a caller would either fan out five
+    hundred round trips or go without the span.
+    """
+    if not tag_ids:
+        return {}
+    rows = (
+        await db.execute(
+            select(PostTag.tag_id, func.min(Post.date), func.max(Post.date))
+            .join(Post, Post.id == PostTag.post_id)
+            .where(PostTag.tag_id.in_(tag_ids), Post.is_deleted.is_(False))
+            .group_by(PostTag.tag_id)
+        )
+    ).all()
+    return {tag_id: (first, last) for tag_id, first, last in rows}
 
 
 @router.get("/tags/{slug}")

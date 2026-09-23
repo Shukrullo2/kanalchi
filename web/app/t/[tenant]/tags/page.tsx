@@ -4,7 +4,10 @@ import { apiFetch } from "@/lib/api";
 import { byDimensionTier } from "@/lib/dimensions";
 import type { DimensionOut } from "@/lib/types";
 
-export const metadata = { title: "Index" };
+export async function generateMetadata() {
+  const t = await getTranslations("tags");
+  return { title: t("title") };
+}
 
 /**
  * The index has no "all groups" view — with seventeen of them and hundreds of

@@ -5,36 +5,39 @@
 	}
 }
 
-# Central admin panel
-{$ADMIN_HOST} {
+# Shared by the admin panel and every tenant domain.
+(app) {
 	encode zstd gzip
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options SAMEORIGIN
+		Referrer-Policy strict-origin-when-cross-origin
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
 	handle /api/* {
-		reverse_proxy api:8000 {
-			flush_interval -1
+		# Studio uploads are capped at 50 MB by the API; stop anything larger at the edge.
+		request_body {
+			max_size 64MB
 		}
-	}
-	handle {
-		reverse_proxy web:3000
-	}
-}
-
-# Every tenant domain (certificate issued on demand after the ask endpoint approves it)
-https:// {
-	tls {
-		on_demand
-	}
-	encode zstd gzip
-
-	handle /api/* {
 		reverse_proxy api:8000 {
 			flush_interval -1
+			# The tenant is resolved from Host; this header is only ever set by the Next.js server.
+			header_up -X-Tenant-Host
 		}
 	}
 	handle /tg/* {
 		reverse_proxy api:8000
 	}
-	handle_path /media/* {
-		rewrite * /media{path}
+	# Post media (public bucket) and studio uploads (private bucket, presigned URLs).
+	# The Host header is rewritten to the internal endpoint so presigned signatures verify.
+	handle /media/* {
+		reverse_proxy minio:9000 {
+			header_up Host minio:9000
+		}
+	}
+	handle /uploads/* {
 		reverse_proxy minio:9000 {
 			header_up Host minio:9000
 		}
@@ -42,4 +45,22 @@ https:// {
 	handle {
 		reverse_proxy web:3000
 	}
+}
+
+# Central admin panel: a normal certificate for a known name.
+{$ADMIN_HOST} {
+	import app
+}
+
+# Every tenant domain: the certificate is issued on demand once the ask endpoint approves it.
+https:// {
+	tls {
+		on_demand
+	}
+	import app
+}
+
+# Plain HTTP on tenant domains only redirects; ACME challenges are handled by Caddy before this.
+http:// {
+	redir https://{host}{uri} permanent
 }

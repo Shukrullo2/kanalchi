@@ -2,20 +2,21 @@
 
 from __future__ import annotations
 
+import asyncio
 import secrets
 from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from kanalchi.api.deps import enforce_same_origin, get_db, require_admin
 from kanalchi.core.crypto import encrypt
 from kanalchi.core.jobs import create_job_run
 from kanalchi.core.logging import get_logger
-from kanalchi.core.models import Channel, TelegramAccount, Tenant
+from kanalchi.core.models import Channel, JobRun, Post, TelegramAccount, Tenant
 from kanalchi.core.redis import get_redis
 from kanalchi.core.settings import get_settings
 from kanalchi.jobs import telegram_jobs
@@ -221,7 +222,8 @@ async def verify_tenant_domain(tenant_id: int, db: AsyncSession = Depends(get_db
     tenant = await db.get(Tenant, tenant_id)
     if tenant is None:
         raise HTTPException(404, "tenant not found")
-    ok, detail = verify_domain(tenant.domain)
+    # A DNS lookup is blocking; off the event loop so a slow resolver does not stall the API.
+    ok, detail = await asyncio.to_thread(verify_domain, tenant.domain)
     if ok:
         await mark_domain_verified(tenant_id)
         await get_redis().delete(f"tls:ask:{tenant.domain}")
@@ -238,6 +240,8 @@ async def start_backfill(tenant_id: int, db: AsyncSession = Depends(get_db)) -> 
         raise HTTPException(400, "attach the channel first")
     if channel.telegram_account_id is None:
         raise HTTPException(400, "channel has no Telegram account")
+    if tenant.status == "paused":
+        raise HTTPException(409, "the channel is paused; resume it first")
     tenant.status = "backfilling"
     channel.backfill_status = "running"
     job_run_id = await create_job_run(tenant_id, "backfill", {"channel_id": channel.id})
@@ -267,7 +271,24 @@ async def checklist(tenant_id: int, db: AsyncSession = Depends(get_db)) -> dict:
     if tenant is None:
         raise HTTPException(404, "tenant not found")
     channel = await db.scalar(select(Channel).where(Channel.tenant_id == tenant_id))
-    ok, dns_detail = verify_domain(tenant.domain)
+    from kanalchi.jobs.pipeline import pipeline_status
+
+    ok, dns_detail = await asyncio.to_thread(verify_domain, tenant.domain)
+    pipeline = await pipeline_status(tenant_id)
+    imported = (
+        await db.scalar(select(func.count()).select_from(Post).where(Post.channel_id == channel.id))
+        if channel
+        else 0
+    )
+    # The wizard polls this; a failed resolve or import would otherwise sit there silently.
+    latest = await db.scalar(
+        select(JobRun).where(JobRun.tenant_id == tenant_id).order_by(JobRun.id.desc()).limit(1)
+    )
+    last_error = (
+        {"type": latest.type, "error": latest.error, "at": latest.finished_at}
+        if latest is not None and latest.status == "failed"
+        else None
+    )
     return {
         "tenant_id": tenant.id,
         "domain": tenant.domain,
@@ -287,8 +308,11 @@ async def checklist(tenant_id: int, db: AsyncSession = Depends(get_db)) -> dict:
                 "done": channel is not None and channel.backfill_status == "done",
                 "status": channel.backfill_status if channel else None,
                 "checkpoint": channel.backfill_checkpoint if channel else 0,
+                "imported": imported or 0,
                 "total": channel.backfill_total_estimate if channel else None,
             },
         },
+        "last_error": last_error,
+        "pipeline": pipeline,
         "updated_at": datetime.now(UTC),
     }

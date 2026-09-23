@@ -17,6 +17,10 @@ Roles: viewer (public), blogger (`/studio`, Telegram Login + channel-admin check
   streaming, structured outputs. No assistant prefill, no `budget_tokens`. Record every `usage` in `usage_ledger`.
 - Long jobs are chains of short resumable jobs (≤ ~10 min). Backfill checkpoints on `channels.backfill_checkpoint`.
 - Secrets at rest (Telethon sessions, bot tokens) are Fernet-encrypted (`core/crypto.py`); the API never decrypts sessions.
+- `APP_ENV=prod` is what makes a deployment production: dev-login off, `APP_MASTER_KEY` + a real `SESSION_SECRET`
+  required at startup, Secure cookies. `infra/compose.yml` sets it; never remove it from `infra/.env`.
+- Presigned MinIO URLs are minted against the internal endpoint; anything a browser must open goes through
+  `storage.public_presigned_url()` (Caddy proxies `/media/*` and `/uploads/*` to MinIO on every tenant host).
 
 ## Commands
 `make dev-infra && make migrate && make seed && make api` (:8001) · `kanalchi seed-dev --posts 24` for synthetic posts · `make web` (:3001) · `make worker-*` ·
@@ -25,8 +29,8 @@ Roles: viewer (public), blogger (`/studio`, Telegram Login + channel-admin check
 ## Phase status
 Phases 0-5 are in: scaffold, ingestion + public blog, extraction/taxonomy/tags, viewer chat,
 blogger studio, admin ops + enrichment (stories, entity summaries, costs, alerts).
-No Anthropic or Voyage key exists in this environment, so every model call is unit-tested but never
-exercised end to end. `kanalchi seed-dev --posts N` and `kanalchi seed-tags` give you demo content
+Model calls are unit-tested with fakes; whether they run for real depends on the keys in `backend/.env`
+(anything that defers an AI job spends money when they are present). `kanalchi seed-dev --posts N` and `kanalchi seed-tags` give you demo content
 and a hand-made taxonomy, which is enough to work on search, tags and every page without keys.
 
 ## Conventions

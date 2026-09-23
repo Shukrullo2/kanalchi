@@ -40,7 +40,7 @@ export function AdminNav({
             {onboardLabel}
           </Link>
           <span className="hidden text-xs text-muted-foreground md:inline">{name}</span>
-          <ThemeToggle />
+          <ThemeToggle label="Switch between light and dark" />
           <SignOut label="Sign out" />
         </div>
       </div>

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { State } from "@/components/admin/StatusDot";
 import { apiFetch } from "@/lib/api";
@@ -44,7 +45,9 @@ export default async function JobsPage() {
                   )}
                 </span>
                 {j.tenant_id ? (
-                  <span className="shrink-0 text-xs text-muted-foreground">channel {j.tenant_id}</span>
+                  <Link href={`/tenants/${j.tenant_id}`} className="link-quiet shrink-0 text-xs">
+                    {j.tenant_domain ?? `channel ${j.tenant_id}`}
+                  </Link>
                 ) : null}
                 {j.cost_usd ? (
                   <span className="tnum shrink-0 text-xs">${j.cost_usd.toFixed(3)}</span>

@@ -29,7 +29,8 @@ export type CloudInput = {
   title: string;
 };
 
-export type PlacedWord = CloudInput & {
+/** Where a word ended up. Carried alongside whatever the caller put in. */
+export type Placement = {
   /** Centre of the word, which is also what it rotates about. */
   cx: number;
   cy: number;
@@ -37,12 +38,17 @@ export type PlacedWord = CloudInput & {
   rotated: boolean;
 };
 
-export type CloudLayout = {
-  words: PlacedWord[];
+export type PlacedWord = CloudInput & Placement;
+
+export type CloudLayout<T = CloudInput> = {
+  words: (T & Placement)[];
   viewBox: string;
   /** Width and height in the same units as the viewBox, for the aspect ratio. */
   width: number;
   height: number;
+  /** Top-left of the box, so a caller can express a word's position as a share of it. */
+  minX: number;
+  minY: number;
 };
 
 // Narrow and wide characters, as fractions of the font size. Everything else
@@ -133,14 +139,17 @@ export type CloudOptions = {
   rotateShare: number;
 };
 
-export function layoutCloud(input: CloudInput[], options: CloudOptions): CloudLayout {
+export function layoutCloud<T extends CloudInput>(
+  input: T[],
+  options: CloudOptions,
+): CloudLayout<T> {
   const { minSize, maxSize, aspect, rotateShare } = options;
   // Largest first: the big words must get the middle, or they end up marooned
   // at the edge with a hole where they should have been.
   const ordered = [...input].sort((a, b) => b.weight - a.weight);
 
   const grid = new Grid(Math.max(24, minSize * 2));
-  const placed: PlacedWord[] = [];
+  const placed: (T & Placement)[] = [];
   let minX = 0;
   let maxX = 0;
   let minY = 0;
@@ -186,5 +195,7 @@ export function layoutCloud(input: CloudInput[], options: CloudOptions): CloudLa
     viewBox: `${minX - pad} ${minY - pad} ${width} ${height}`,
     width,
     height,
+    minX: minX - pad,
+    minY: minY - pad,
   };
 }

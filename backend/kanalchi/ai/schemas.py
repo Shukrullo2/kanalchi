@@ -97,7 +97,11 @@ class DiscoveredDimension(Strict):
     label_uz: str
     label_ru: str
     label_en: str
-    description: str
+    # Printed under the group's title on the public index, so it is written for a
+    # reader in each of the three languages rather than translated later.
+    description_uz: str = Field(description="one sentence, Uzbek Latin")
+    description_ru: str = Field(description="one sentence, Russian")
+    description_en: str = Field(description="one sentence, English")
     extraction_hint: str = Field(
         description="one sentence telling the extractor what belongs in this dimension"
     )
@@ -124,7 +128,9 @@ class TagProposal(Strict):
     aliases: list[str] = Field(
         description="every script and language variant, including Cyrillic and Russian forms"
     )
-    description: str = Field(description="<= 140 characters, English")
+    description_uz: str = Field(description="<= 140 characters, Uzbek Latin")
+    description_ru: str = Field(description="<= 140 characters, Russian")
+    description_en: str = Field(description="<= 140 characters, English")
     parent_canonical: str | None
     merged_candidates: list[str] = Field(description="candidate names absorbed into this tag")
     keep_reason: Literal["frequent", "important_low_frequency"]

@@ -25,36 +25,44 @@ export function TenantActions({ tenant }: { tenant: AdminTenant }) {
   }
 
   const paused = tenant.status === "paused";
+  const imported = tenant.channel?.backfill_status === "done";
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm">
+      {imported ? (
+        <button
+          disabled={busy || paused}
+          onClick={() => void run("catch up", () => post(`/api/admin/tenants/${tenant.id}/start`))}
+          className="btn-ghost"
+          title="Reads anything posted since the last import."
+        >
+          Catch up history
+        </button>
+      ) : null}
       <button
-        disabled={busy}
-        onClick={() => void run("import", () => post(`/api/admin/tenants/${tenant.id}/start`))}
-        className="btn-ghost"
-      >
-        Resume import
-      </button>
-      <button
-        disabled={busy}
+        disabled={busy || paused || !tenant.channel}
         onClick={() => void run("resync", () => post(`/api/admin/tenants/${tenant.id}/resync?days=30`))}
         className="btn-ghost"
+        title="Re-reads the last 30 days for edits, deletions and view counts."
       >
         Resync 30d
       </button>
       <button
         disabled={busy}
-        onClick={() => void run("dns", () => post(`/api/admin/tenants/${tenant.id}/verify-domain`))}
+        onClick={() =>
+          void run(paused ? "resume" : "pause", () =>
+            patch(`/api/admin/tenants/${tenant.id}`, { status: paused ? "active" : "paused" }),
+          )
+        }
         className="btn-ghost"
-      >
-        Check DNS
-      </button>
-      <button
-        disabled={busy}
-        onClick={() => void run(paused ? "resume" : "pause", () => patch(`/api/admin/tenants/${tenant.id}`, { status: paused ? "active" : "paused" }))}
-        className="btn-ghost"
+        title="Paused: the assistant, imports and every background job stop; the site stays up and readable."
       >
         {paused ? "Resume channel" : "Pause channel"}
       </button>
+      {paused ? (
+        <span className="text-xs" style={{ color: "var(--warning)" }}>
+          Paused: nothing spends or runs for this channel; readers can still browse.
+        </span>
+      ) : null}
       {msg ? <span className="text-muted-foreground">{msg}</span> : null}
     </div>
   );

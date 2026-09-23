@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
+from procrastinate.exceptions import AlreadyEnqueued
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,23 +22,21 @@ from kanalchi.core import storage
 from kanalchi.core.jobs import create_job_run
 from kanalchi.core.limits import get_budget
 from kanalchi.core.logging import get_logger
+from kanalchi.core.members import invite_member, list_members, remove_member
 from kanalchi.core.models import (
     Channel,
-    Dimension,
     Draft,
     Idea,
     Post,
-    PostTag,
-    Tag,
-    TagAlias,
     TagCandidate,
     Tenant,
+    TenantMember,
     Upload,
     UsageLedger,
 )
 from kanalchi.core.settings import get_settings
-from kanalchi.jobs import index_jobs, publish_jobs
-from kanalchi.telegram.formatting import DraftValidationError, length, validate
+from kanalchi.jobs import publish_jobs
+from kanalchi.telegram.formatting import DraftValidationError, length, validate, web_safe_html
 
 log = get_logger(__name__)
 router = APIRouter(
@@ -47,6 +46,21 @@ router = APIRouter(
 )
 
 UPLOAD_MAX_BYTES = 50 * 1024 * 1024
+
+
+def _not_paused(tenant: Tenant) -> None:
+    """Pausing a channel stops everything that spends: the assistant, rebuilds, imports."""
+    if tenant.status == "paused":
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "this channel is paused")
+
+
+async def _set_idea_status(db: AsyncSession, draft: Draft, value: str) -> None:
+    if draft.idea_id:
+        idea = await db.get(Idea, draft.idea_id)
+        if idea is not None and idea.status not in {"published", "dropped"}:
+            idea.status = value
+
+
 UPLOAD_KINDS = {
     "image/jpeg": "photo",
     "image/png": "photo",
@@ -163,6 +177,7 @@ def draft_out(draft: Draft) -> dict[str, Any]:
         "published_tg_message_id": draft.published_tg_message_id,
         "published_at": draft.published_at,
         "publish_error": draft.publish_error,
+        "disable_preview": bool(draft.disable_preview),
         "suggested_tags": draft.suggested_tags or [],
         "ai_generated": draft.ai_generated,
         "length": length(draft.html or ""),
@@ -209,7 +224,7 @@ async def create_draft(
         user_id=user.user_id,
         idea_id=body.idea_id,
         title=body.title,
-        html=body.html,
+        html=web_safe_html(body.html),
         media=body.media,
         disable_preview=body.disable_preview,
         status="draft",
@@ -244,7 +259,10 @@ async def patch_draft(
     if draft.status == "published":
         raise HTTPException(status.HTTP_409_CONFLICT, "a published post cannot be edited here")
     for key, value in body.model_dump(exclude_none=True).items():
-        setattr(draft, key, value)
+        # The editor's markup is rendered back into the studio as HTML, so it is
+        # scrubbed on the way in: an editor must not be able to plant a script that
+        # runs in the owner's browser.
+        setattr(draft, key, web_safe_html(value) if key == "html" else value)
     draft.status = "draft" if draft.status in {"failed", "canceled"} else draft.status
     return draft_out(draft)
 
@@ -294,12 +312,20 @@ async def publish_draft(
     draft.scheduled_at = when
     draft.status = "scheduled" if when else "publishing"
     draft.publish_error = None
+    await _set_idea_status(db, draft, "scheduled" if when else "drafting")
     await db.flush()
 
+    # A queued job cannot be withdrawn, so the job is told which schedule it serves and checks
+    # the row when it fires; cancelling or moving the post simply leaves the old job with
+    # nothing to do. The lock only folds two identical requests into one.
+    slot = str(int(when.timestamp())) if when else "now"
     task = publish_jobs.publish.configure(
-        queueing_lock=f"publish:{draft_id}", **({"schedule_at": when} if when else {})
+        queueing_lock=f"publish:{draft_id}:{slot}", **({"schedule_at": when} if when else {})
     )
-    await task.defer_async(draft_id=draft_id)
+    try:
+        await task.defer_async(draft_id=draft_id, scheduled_at=when.isoformat() if when else None)
+    except AlreadyEnqueued:
+        pass  # the same send is already waiting; the row already says so
     return {"ok": True, "status": draft.status, "scheduled_at": when}
 
 
@@ -312,6 +338,7 @@ async def cancel_schedule(
         raise HTTPException(status.HTTP_409_CONFLICT, "only a scheduled or failed post can be cancelled")
     draft.status = "draft"
     draft.scheduled_at = None
+    await _set_idea_status(db, draft, "drafting")
     return draft_out(draft)
 
 
@@ -354,7 +381,7 @@ async def upload_media(
         "kind": kind,
         "mime": upload.mime,
         "size_bytes": upload.size_bytes,
-        "url": await storage.presigned_get(s.s3_bucket_uploads, key),
+        "url": storage.public_presigned_url(await storage.presigned_get(s.s3_bucket_uploads, key)),
     }
 
 
@@ -375,6 +402,7 @@ async def draft_with_ai(
 ) -> dict:
     from kanalchi.ai.drafting import draft_post, suggest_tags
 
+    _not_paused(tenant)
     budget = await get_budget(
         tenant.id,
         "studio",
@@ -424,11 +452,12 @@ async def refresh_suggested_tags(
 
     draft = await _get_draft(db, tenant, draft_id)
     draft.suggested_tags = await suggest_tags(tenant.id, draft.html or "")
-    return {"suggested_tags": draft.suggested_tags}
+    return draft_out(draft)
 
 
 @router.post("/voice/rebuild")
 async def rebuild_voice(tenant: Tenant = Depends(require_tenant)) -> dict:
+    _not_paused(tenant)
     job_run_id = await create_job_run(tenant.id, "voice", {})
     await publish_jobs.build_voice.defer_async(tenant_id=tenant.id, job_run_id=job_run_id)
     return {"job_run_id": job_run_id}
@@ -485,189 +514,45 @@ async def overview(tenant: Tenant = Depends(require_tenant), db: AsyncSession = 
     }
 
 
-# --------------------------------------------------------------------- tag management
-@router.get("/tags/pending")
-async def pending_tags(
-    limit: int = Query(50, ge=1, le=200),
+# --------------------------------------------------------------------- members
+class MemberIn(BaseModel):
+    tg_user_id: int
+    role: str = Field(default="editor", pattern="^(owner|editor)$")
+    name: str | None = Field(default=None, max_length=128)
+
+
+def _owner_only(user: SessionData) -> None:
+    if user.role != "owner":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "only the owner can change the team")
+
+
+@router.get("/members")
+async def members(tenant: Tenant = Depends(require_tenant), db: AsyncSession = Depends(get_db)) -> list[dict]:
+    return await list_members(db, tenant.id)
+
+
+@router.post("/members", status_code=201)
+async def add_member(
+    body: MemberIn,
     tenant: Tenant = Depends(require_tenant),
-    db: AsyncSession = Depends(get_db),
-) -> list[dict]:
-    rows = (
-        await db.execute(
-            select(TagCandidate, Dimension.key)
-            .join(Dimension, Dimension.id == TagCandidate.dimension_id)
-            .where(TagCandidate.tenant_id == tenant.id, TagCandidate.status == "pending")
-            .order_by(TagCandidate.count.desc())
-            .limit(limit)
-        )
-    ).all()
-    return [
-        {
-            "id": c.id,
-            "name": c.name,
-            "dimension": key,
-            "count": c.count,
-            "surface_forms": c.surface_forms or [],
-            "sample_post_ids": c.sample_post_ids or [],
-        }
-        for c, key in rows
-    ]
-
-
-class TagEdit(BaseModel):
-    labels: dict[str, str] | None = None
-    description: str | None = Field(default=None, max_length=500)
-    hidden: bool | None = None
-
-
-@router.patch("/tags/{slug}")
-async def edit_tag(
-    slug: str,
-    body: TagEdit,
-    tenant: Tenant = Depends(require_tenant),
+    user: SessionData = Depends(require_member),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """A manual edit pins the tag, which is what makes it survive the next taxonomy rebuild."""
-    tag = await db.scalar(select(Tag).where(Tag.tenant_id == tenant.id, Tag.slug == slug))
-    if tag is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "tag not found")
-    if body.labels:
-        tag.labels = {**(tag.labels or {}), **body.labels}
-        tag.is_pinned = True
-    if body.description is not None:
-        tag.description = body.description
-        tag.is_pinned = True
-    if body.hidden is not None:
-        tag.status = "hidden" if body.hidden else "active"
-        tag.is_pinned = True
-    return {"slug": tag.slug, "status": tag.status, "labels": tag.labels, "is_pinned": tag.is_pinned}
+    _owner_only(user)
+    return await invite_member(db, tenant.id, body.tg_user_id, body.role, body.name)
 
 
-class TagMerge(BaseModel):
-    into: str = Field(min_length=1, max_length=96)
-
-
-@router.post("/tags/{slug}/merge")
-async def merge_tag(
-    slug: str,
-    body: TagMerge,
+@router.delete("/members/{tg_user_id}")
+async def delete_member(
+    tg_user_id: int,
     tenant: Tenant = Depends(require_tenant),
+    user: SessionData = Depends(require_member),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Fold one tag into another: its posts, its aliases and its old URL all follow."""
-    source = await db.scalar(select(Tag).where(Tag.tenant_id == tenant.id, Tag.slug == slug))
-    target = await db.scalar(select(Tag).where(Tag.tenant_id == tenant.id, Tag.slug == body.into))
-    if source is None or target is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "tag not found")
-    if source.id == target.id:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "a tag cannot be merged into itself")
-
-    post_ids = (await db.scalars(select(PostTag.post_id).where(PostTag.tag_id == source.id))).all()
-    existing = set((await db.scalars(select(PostTag.post_id).where(PostTag.tag_id == target.id))).all())
-    for post_id in post_ids:
-        if post_id not in existing:
-            db.add(
-                PostTag(
-                    post_id=post_id, tag_id=target.id, tenant_id=tenant.id, confidence=1.0, source="manual"
-                )
-            )
-    await db.execute(PostTag.__table__.delete().where(PostTag.tag_id == source.id))
-
-    aliases = (await db.scalars(select(TagAlias).where(TagAlias.tag_id == source.id))).all()
-    target_norms = set(
-        (await db.scalars(select(TagAlias.alias_norm).where(TagAlias.tag_id == target.id))).all()
-    )
-    for alias in [*aliases]:
-        if alias.alias_norm not in target_norms:
-            db.add(
-                TagAlias(
-                    tenant_id=tenant.id,
-                    tag_id=target.id,
-                    alias=alias.alias,
-                    alias_norm=alias.alias_norm,
-                    lang=alias.lang,
-                    source="merge",
-                )
-            )
-            target_norms.add(alias.alias_norm)
-    if source.canonical_norm not in target_norms:
-        db.add(
-            TagAlias(
-                tenant_id=tenant.id,
-                tag_id=target.id,
-                alias=source.canonical_name,
-                alias_norm=source.canonical_norm,
-                source="merge",
-            )
-        )
-
-    source.status = "merged"
-    source.merged_into_id = target.id
-    source.is_pinned = True
-    target.is_pinned = True
-    target.post_count = len(existing | set(post_ids))
-    await index_jobs.recompute_counts.defer_async(tenant_id=tenant.id)
-    return {"merged": source.slug, "into": target.slug, "posts_moved": len(post_ids)}
-
-
-@router.post("/tags/pending/{candidate_id}/promote")
-async def promote_candidate(
-    candidate_id: int, tenant: Tenant = Depends(require_tenant), db: AsyncSession = Depends(get_db)
-) -> dict:
-    """Turn a recurring unmatched value into a real tag, with its observed spellings as aliases."""
-    from kanalchi.ai.postprocess import ensure_tag
-    from kanalchi.text.normalize import normalize
-
-    candidate = await db.get(TagCandidate, candidate_id)
-    if candidate is None or candidate.tenant_id != tenant.id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "candidate not found")
-
-    tag_id = await ensure_tag(db, tenant.id, candidate.dimension_id, candidate.name, source="manual")
-    for alias in dict.fromkeys([candidate.name, *(candidate.surface_forms or [])]):
-        alias_norm = normalize(alias)[:200]
-        if not alias_norm:
-            continue
-        exists = await db.scalar(
-            select(TagAlias.id).where(TagAlias.tag_id == tag_id, TagAlias.alias_norm == alias_norm)
-        )
-        if not exists:
-            db.add(
-                TagAlias(
-                    tenant_id=tenant.id,
-                    tag_id=tag_id,
-                    alias=alias[:200],
-                    alias_norm=alias_norm,
-                    source="manual",
-                )
-            )
-    candidate.status = "promoted"
-    candidate.mapped_tag_id = tag_id
-    tag = await db.get(Tag, tag_id)
-    if tag is not None:
-        tag.is_pinned = True
-    await index_jobs.reassign.defer_async(tenant_id=tenant.id)
-    return {"promoted": candidate.name, "tag_id": tag_id}
-
-
-@router.post("/tags/pending/{candidate_id}/reject")
-async def reject_candidate(
-    candidate_id: int, tenant: Tenant = Depends(require_tenant), db: AsyncSession = Depends(get_db)
-) -> dict:
-    candidate = await db.get(TagCandidate, candidate_id)
-    if candidate is None or candidate.tenant_id != tenant.id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "candidate not found")
-    candidate.status = "rejected"
-    return {"ok": True}
-
-
-@router.post("/taxonomy/rebuild")
-async def rebuild_taxonomy(tenant: Tenant = Depends(require_tenant)) -> dict:
-    """Propose a new taxonomy version. It is not applied until someone reviews the diff."""
-    job_run_id = await create_job_run(tenant.id, "taxonomy", {"trigger": "studio"})
-    await index_jobs.build_taxonomy.configure(queueing_lock=f"taxonomy:{tenant.id}").defer_async(
-        tenant_id=tenant.id, job_run_id=job_run_id, auto_apply=False
-    )
-    return {"job_run_id": job_run_id}
+    _owner_only(user)
+    if tg_user_id == user.tg_user_id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "you cannot remove yourself")
+    return {"removed": await remove_member(db, tenant.id, tg_user_id)}
 
 
 # --------------------------------------------------------------------- settings
@@ -687,9 +572,24 @@ async def patch_settings(
 
 
 @router.get("/settings")
-async def get_studio_settings(tenant: Tenant = Depends(require_tenant)) -> dict:
+async def get_studio_settings(
+    tenant: Tenant = Depends(require_tenant),
+    user: SessionData = Depends(require_member),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
     settings = tenant.settings or {}
+    channel_username = await db.scalar(select(Channel.username).where(Channel.tenant_id == tenant.id))
+    dm_chat_id = await db.scalar(
+        select(TenantMember.dm_chat_id).where(
+            TenantMember.tenant_id == tenant.id, TenantMember.user_id == user.user_id
+        )
+    )
     return {
+        "channel_username": channel_username,
+        # Whether this member has pressed /start in the bot, which every notification needs.
+        "notifications_linked": dm_chat_id is not None,
+        "role": user.role,
+        "paused": tenant.status == "paused",
         "chat_enabled": settings.get("chat_enabled", True),
         "chat_persona": settings.get("chat_persona"),
         "voice_profile": settings.get("voice_profile"),

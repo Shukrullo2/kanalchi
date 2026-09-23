@@ -19,6 +19,16 @@ async def create_job_run(tenant_id: int | None, type_: str, params: dict[str, An
         return jr.id
 
 
+async def delete_job_run(job_run_id: int | None) -> None:
+    """For a run that never became a job (the queue already held one); it was never real."""
+    if job_run_id is None:
+        return
+    async with session_scope() as db:
+        jr = await db.get(JobRun, job_run_id)
+        if jr is not None and jr.status == "queued":
+            await db.delete(jr)
+
+
 async def update_job_run(job_run_id: int | None, **values: Any) -> None:
     if job_run_id is None:
         return

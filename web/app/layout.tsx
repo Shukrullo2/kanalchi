@@ -31,7 +31,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       suppressHydrationWarning
       className={cn(sans.variable, display.variable, theme !== "light" && "dark", theme === "light" && "light")}
     >
-      <body className="min-h-screen font-sans antialiased">
+      {/* Extensions inject attributes on `body` before React hydrates — ColorZilla's
+          `cz-shortcut-listen`, password managers, translators — and each one is
+          reported as a mismatch the user cannot act on. `suppressHydrationWarning`
+          covers one element only, so the `html` tag's does not reach this one. */}
+      <body className="min-h-screen font-sans antialiased" suppressHydrationWarning>
         <NextIntlClientProvider>{children}</NextIntlClientProvider>
       </body>
     </html>

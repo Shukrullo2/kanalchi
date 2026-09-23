@@ -2,7 +2,9 @@
 import { ExternalIcon } from "@/components/Icons";
 import type { MediaOut } from "@/lib/types";
 
-function Item({ m, tall }: { m: MediaOut; tall: boolean }) {
+type Labels = { open: string; file: string };
+
+function Item({ m, tall, labels }: { m: MediaOut; tall: boolean; labels: Labels }) {
   const src = m.url ?? m.thumb_url;
   const frame = tall ? "max-h-[70vh]" : "aspect-square h-full w-full object-cover";
 
@@ -19,7 +21,7 @@ function Item({ m, tall }: { m: MediaOut; tall: boolean }) {
         ) : null}
         <span className="relative flex items-center gap-1.5 text-xs text-muted-foreground group-hover:text-foreground">
           {m.kind}
-          {m.size_bytes ? ` · ${Math.round(m.size_bytes / 1048576)} MB` : ""} · open in Telegram
+          {m.size_bytes ? ` · ${Math.round(m.size_bytes / 1048576)} MB` : ""} · {labels.open}
           <ExternalIcon size={12} />
         </span>
       </a>
@@ -51,7 +53,7 @@ function Item({ m, tall }: { m: MediaOut; tall: boolean }) {
         className="flex items-center gap-2 rounded-lg border bg-surface-2 p-3 text-sm hover:border-border-strong"
       >
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">↓</span>
-        <span className="truncate">{m.file_name ?? "document"}</span>
+        <span className="truncate">{m.file_name ?? labels.file}</span>
       </a>
     );
   }
@@ -67,13 +69,13 @@ function Item({ m, tall }: { m: MediaOut; tall: boolean }) {
   );
 }
 
-export function MediaGallery({ media }: { media: MediaOut[] }) {
+export function MediaGallery({ media, labels }: { media: MediaOut[]; labels: Labels }) {
   if (media.length === 0) return null;
-  if (media.length === 1) return <Item m={media[0]} tall />;
+  if (media.length === 1) return <Item m={media[0]} tall labels={labels} />;
   return (
     <div className={`grid gap-1.5 ${media.length === 2 ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-3"}`}>
       {media.map((m) => (
-        <Item key={m.id} m={m} tall={false} />
+        <Item key={m.id} m={m} tall={false} labels={labels} />
       ))}
     </div>
   );

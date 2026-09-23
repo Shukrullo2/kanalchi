@@ -5,13 +5,17 @@ import { apiFetch } from "@/lib/api";
 import { getMe } from "@/lib/auth";
 import type { TenantPublic } from "@/lib/types";
 
-export const metadata = { title: "Studio", robots: { index: false } };
+export async function generateMetadata() {
+  const t = await getTranslations("studio");
+  return { title: t("title"), robots: { index: false } };
+}
 
 export default async function StudioLayout({ children }: { children: React.ReactNode }) {
-  const [me, tenant, t] = await Promise.all([
+  const [me, tenant, t, common] = await Promise.all([
     getMe(),
     apiFetch<TenantPublic>("/api/tenant"),
     getTranslations("studio"),
+    getTranslations("common"),
   ]);
 
   if (!me.authenticated || (me.role !== "owner" && me.role !== "editor")) {
@@ -19,7 +23,11 @@ export default async function StudioLayout({ children }: { children: React.React
       <div className="mx-auto max-w-md space-y-4 py-16 text-center">
         <h1 className="text-[1.75rem] font-semibold tracking-tight">{t("title")}</h1>
         <p className="text-sm text-muted-foreground">{t("needLogin")}</p>
-        <TelegramLogin botUsername={tenant.bot_username} dev={process.env.NODE_ENV === "development"} />
+        <TelegramLogin
+          botUsername={tenant.bot_username}
+          dev={process.env.NODE_ENV === "development"}
+          notConfigured={common("loginNotConfigured")}
+        />
       </div>
     );
   }

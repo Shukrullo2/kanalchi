@@ -16,11 +16,15 @@ export function SiteHeader({
   photoUrl,
   items,
   studio,
+  menuLabel,
+  themeLabel,
 }: {
   title: string;
   photoUrl?: string | null;
   items: NavItem[];
   studio?: { href: string; label: string } | null;
+  menuLabel: string;
+  themeLabel: string;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -50,11 +54,11 @@ export function SiteHeader({
               </Link>
             ) : null}
             <LocaleSwitch />
-            <ThemeToggle />
+            <ThemeToggle label={themeLabel} />
             <button
               className="grid h-9 w-9 place-items-center rounded-lg border border-border-strong text-muted-foreground hover:text-foreground lg:hidden"
               onClick={() => setOpen((v) => !v)}
-              aria-label="Menu"
+              aria-label={menuLabel}
               aria-expanded={open}
             >
               {open ? <CloseIcon size={18} /> : <MenuIcon size={18} />}

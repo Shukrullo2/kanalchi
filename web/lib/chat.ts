@@ -8,6 +8,11 @@ export type StreamHandlers = {
   onCitations: (cards: ChatCitation[]) => void;
   onError: (message: string) => void;
   onDone: () => void;
+  /**
+   * What to say when the failure carries no wording of its own. The reader's
+   * language lives in the messages, not here, so the caller supplies both.
+   */
+  fallbacks: { unavailable: string; wrong: string };
 };
 
 /**
@@ -25,7 +30,7 @@ export async function streamTurn(sessionId: string, text: string, handlers: Stre
 
   if (!res.ok || !res.body) {
     const detail = await res.json().catch(() => ({}));
-    handlers.onError((detail as { detail?: string }).detail ?? "The assistant is unavailable.");
+    handlers.onError((detail as { detail?: string }).detail ?? handlers.fallbacks.unavailable);
     handlers.onDone();
     return;
   }
@@ -86,7 +91,7 @@ function dispatch(frame: string, h: StreamHandlers) {
       h.onCitations((payload.posts as ChatCitation[]) ?? []);
       break;
     case "error":
-      h.onError(String(payload.message ?? "Something went wrong."));
+      h.onError(String(payload.message ?? h.fallbacks.wrong));
       break;
     default:
       break;

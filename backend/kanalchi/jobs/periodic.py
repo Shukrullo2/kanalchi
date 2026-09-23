@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from procrastinate.exceptions import AlreadyEnqueued
 from sqlalchemy import select
 
 from kanalchi.core.db import session_scope
@@ -62,6 +63,15 @@ async def resync_quarter(context, timestamp: int) -> None:  # noqa: ANN001
     await _fan_out_resync(90)
 
 
+@app.periodic(cron="*/10 * * * *")
+@app.task(queue="index", name="periodic.pipeline_reconcile", pass_context=True)
+async def pipeline_reconcile(context, timestamp: int) -> None:  # noqa: ANN001
+    """Re-queue whatever step a channel is missing, so a lost job never strands an import."""
+    from kanalchi.jobs.pipeline import reconcile_all
+
+    await reconcile_all()
+
+
 @app.periodic(cron="*/2 * * * *")
 @app.task(queue="index", name="periodic.poll_batches", pass_context=True)
 async def poll_batches(context, timestamp: int) -> None:  # noqa: ANN001
@@ -70,7 +80,12 @@ async def poll_batches(context, timestamp: int) -> None:  # noqa: ANN001
     from kanalchi.jobs import index_jobs
 
     for llm_batch_id in await _poll():
-        await index_jobs.ingest_batch.defer_async(llm_batch_id=llm_batch_id)
+        try:
+            await index_jobs.ingest_batch.configure(queueing_lock=f"ingest:{llm_batch_id}").defer_async(
+                llm_batch_id=llm_batch_id
+            )
+        except AlreadyEnqueued:
+            pass  # the reconciler got there first; one ingest per batch is the point
 
 
 @app.periodic(cron="20 2 * * *")
@@ -117,51 +132,35 @@ async def weekly_threads(context, timestamp: int) -> None:  # noqa: ANN001
 @app.periodic(cron="30 5 * * 1")
 @app.task(queue="index", name="periodic.pending_digest", pass_context=True)
 async def pending_digest(context, timestamp: int) -> None:  # noqa: ANN001
-    """Weekly nudge: tell each blogger how many names are waiting to become tags."""
+    """Weekly nudge to the platform admins: how many names per channel are waiting to become tags.
+    The index is curated in the console, so this is theirs to act on, not the bloggers'."""
     from sqlalchemy import func
 
-    from kanalchi.core.models import TagCandidate, TenantMember
+    from kanalchi.core.models import TagCandidate
+    from kanalchi.core.settings import get_settings
 
     async with session_scope() as db:
         rows = (
             await db.execute(
-                select(Tenant.id, Tenant.domain, Tenant.bot_token_enc, func.count(TagCandidate.id))
+                select(Tenant.id, Tenant.domain, func.count(TagCandidate.id))
                 .join(TagCandidate, TagCandidate.tenant_id == Tenant.id)
                 .where(
                     Tenant.status == "active",
                     TagCandidate.status == "pending",
                     TagCandidate.count >= 3,
                 )
-                .group_by(Tenant.id, Tenant.domain, Tenant.bot_token_enc)
+                .group_by(Tenant.id, Tenant.domain)
+                .order_by(func.count(TagCandidate.id).desc())
             )
         ).all()
-
-    from kanalchi.api.routers.webhooks import tenant_bot
-    from kanalchi.core.settings import get_settings
-
+    if not rows:
+        return
     settings = get_settings()
-    for tenant_id, domain, token, count in rows:
-        if not token or not count:
-            continue
-        async with session_scope() as db:
-            tenant = await db.get(Tenant, tenant_id)
-            members = (
-                await db.scalars(
-                    select(TenantMember).where(
-                        TenantMember.tenant_id == tenant_id, TenantMember.dm_chat_id.is_not(None)
-                    )
-                )
-            ).all()
-            chat_ids = [m.dm_chat_id for m in members]
-            db.expunge_all()
-        for chat_id in chat_ids:
-            try:
-                await tenant_bot(tenant).send_message(
-                    chat_id,
-                    f"{count} ta yangi nom teg bo'lishini kutmoqda.\n{settings.public_url(domain, '/studio/tags')}",
-                )
-            except Exception as exc:  # noqa: BLE001
-                log.info("periodic.digest.failed", tenant_id=tenant_id, error=str(exc)[:200])
+    lines = [
+        f"{domain}: {count} names waiting — {settings.public_url(settings.admin_host, f'/tenants/{tenant_id}/index')}"
+        for tenant_id, domain, count in rows[:20]
+    ]
+    await _alert_admins("Index review this week:\n" + "\n".join(lines))
 
 
 async def _alert_admins(message: str) -> None:

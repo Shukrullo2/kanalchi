@@ -5,7 +5,7 @@
  * hydrate. Which icon shows is decided by CSS, so this component holds no state at all. Readers who
  * never touch it follow prefers-color-scheme.
  */
-export function ThemeToggle() {
+export function ThemeToggle({ label }: { label: string }) {
   function toggle() {
     const root = document.documentElement;
     const currentlyDark = getComputedStyle(root).colorScheme === "dark" || root.classList.contains("dark");
@@ -18,7 +18,7 @@ export function ThemeToggle() {
   return (
     <button
       onClick={toggle}
-      aria-label="Toggle dark mode"
+      aria-label={label}
       className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
     >
       <MoonIcon className="dark:hidden" />

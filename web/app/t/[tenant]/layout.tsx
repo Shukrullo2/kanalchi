@@ -7,10 +7,11 @@ import { getMe } from "@/lib/auth";
 import type { TenantPublic } from "@/lib/types";
 
 export default async function TenantLayout({ children }: { children: React.ReactNode }) {
-  const [tenant, me, nav] = await Promise.all([
+  const [tenant, me, nav, common] = await Promise.all([
     apiFetchOrNull<TenantPublic>("/api/tenant"),
     getMe(),
     getTranslations("nav"),
+    getTranslations("common"),
   ]);
   if (!tenant) notFound();
   const isMember = me.authenticated && (me.role === "owner" || me.role === "editor");
@@ -21,15 +22,17 @@ export default async function TenantLayout({ children }: { children: React.React
         title={tenant.title || tenant.domain}
         photoUrl={tenant.photo_url}
         items={[
-          { href: "/", label: nav("home") },
+          { href: "/posts", label: nav("posts") },
           { href: "/tags", label: nav("tags") },
+          { href: "/graph", label: nav("graph") },
           { href: "/search", label: nav("search") },
           { href: "/stories", label: nav("stories") },
           { href: "/top", label: nav("top") },
-          { href: "/stats", label: nav("stats") },
           { href: "/chat", label: nav("chat") },
         ]}
         studio={isMember ? { href: "/studio", label: nav("studio") } : null}
+        menuLabel={common("menu")}
+        themeLabel={common("theme")}
       />
 
       <main className="shell flex-1 pb-10 pt-6">{children}</main>

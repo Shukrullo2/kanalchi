@@ -6,7 +6,7 @@ budgets are driven by measured spend, never estimates.
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 import anthropic
@@ -85,7 +85,7 @@ async def record_usage(
     usd = cost if cost is not None else cost_usd(model, usage, batch=batch)
     values = {
         "tenant_id": tenant_id,
-        "day": date.today(),
+        "day": datetime.now(UTC).date(),
         "provider": provider,
         "model": model,
         "purpose": purpose,

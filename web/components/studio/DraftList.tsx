@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { SparkIcon } from "@/components/Icons";
 import { State } from "@/components/admin/StatusDot";
@@ -11,6 +11,8 @@ import { fullDate } from "@/lib/format";
 import type { DraftOut } from "@/lib/types";
 
 export function DraftList({ initial }: { initial: DraftOut[] }) {
+  const t = useTranslations("studio.drafts");
+  const status = useTranslations("studio.status");
   const router = useRouter();
   const locale = useLocale();
   const [brief, setBrief] = useState("");
@@ -39,7 +41,7 @@ export function DraftList({ initial }: { initial: DraftOut[] }) {
           <input
             value={brief}
             onChange={(e) => setBrief(e.target.value)}
-            placeholder="What should this post be about?"
+            placeholder={t("brief")}
             className="input-field"
           />
           <button
@@ -48,7 +50,7 @@ export function DraftList({ initial }: { initial: DraftOut[] }) {
             className="btn-primary shrink-0"
           >
             <SparkIcon size={14} />
-            Write a draft
+            {t("write")}
           </button>
         </div>
         <button
@@ -56,7 +58,7 @@ export function DraftList({ initial }: { initial: DraftOut[] }) {
           disabled={busy}
           className="mt-2 text-xs text-muted-foreground hover:text-foreground"
         >
-          Or start from an empty post
+          {t("orEmpty")}
         </button>
         {error ? (
           <p className="mt-2 text-sm" style={{ color: "var(--destructive)" }}>
@@ -67,14 +69,14 @@ export function DraftList({ initial }: { initial: DraftOut[] }) {
 
       {initial.length === 0 ? (
         <p className="border-t py-16 text-center text-sm text-muted-foreground">
-          Nothing written yet. Describe a post above and the assistant will start one.
+          {t("empty")}
         </p>
       ) : (
         <ul className="rows mt-8 border-t">
           {initial.map((d) => (
             <li key={d.id} className="row">
               <div className="row-margin">
-                <State status={d.status} />
+                <State status={d.status} label={status.has(d.status) ? status(d.status) : undefined} />
                 {d.scheduled_at ? (
                   <span suppressHydrationWarning>{fullDate(d.scheduled_at, locale)}</span>
                 ) : null}
@@ -82,7 +84,7 @@ export function DraftList({ initial }: { initial: DraftOut[] }) {
               <div className="row-body">
                 <Link href={`/studio/drafts/${d.id}`} className="block hover:text-primary">
                   <span className="block truncate text-[0.9375rem] font-medium">
-                    {d.title || stripTags(d.html) || "Untitled draft"}
+                    {d.title || stripTags(d.html) || t("untitled")}
                   </span>
                 </Link>
                 <p className="mt-0.5 text-xs text-muted-foreground">
@@ -90,8 +92,8 @@ export function DraftList({ initial }: { initial: DraftOut[] }) {
                     <span style={{ color: "var(--destructive)" }}>{d.publish_error}</span>
                   ) : (
                     <>
-                      {d.length} characters
-                      {d.ai_generated ? ", drafted by the assistant" : ""}
+                      {t("characters", { count: d.length })}
+                      {d.ai_generated ? t("byAssistant") : ""}
                     </>
                   )}
                 </p>

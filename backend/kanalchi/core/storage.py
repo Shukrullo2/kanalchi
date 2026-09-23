@@ -73,11 +73,17 @@ def public_media_url(host: str, key: str) -> str:
     return f"{s.public_scheme}://{host}/media/{key}"
 
 
-async def download_bytes(bucket: str, key: str) -> bytes | None:
-    """Read an object back. None when it is missing rather than raising."""
-    async with _session.client(**_client_kwargs()) as s3:
-        try:
-            response = await s3.get_object(Bucket=bucket, Key=key)
-        except Exception:  # noqa: BLE001 — a missing key is an ordinary outcome here
-            return None
-        return await response["Body"].read()
+def public_presigned_url(presigned: str) -> str:
+    """Rewrite a presigned URL so a browser can use it.
+
+    Presigned URLs are minted against the internal endpoint (``http://minio:9000`` in
+    production), which a browser cannot reach. Caddy (and the Next dev rewrite) proxy
+    ``/<bucket>/…`` on the tenant host to MinIO and forward the internal ``Host`` header, so
+    the signature — which covers host, path and query but not the scheme or origin the browser
+    used — still verifies. The result is same-origin relative, which works on any tenant host
+    and on the dev port alike.
+    """
+    endpoint = get_settings().s3_endpoint.rstrip("/")
+    if not presigned.startswith(endpoint + "/"):
+        return presigned
+    return presigned[len(endpoint) :]

@@ -70,6 +70,19 @@ async def test_repeat_sightings_accumulate_without_unbounded_growth(ids: tuple[i
         assert row.sample_post_ids == [1, 2, 3, 4, 5], "sample ids should stop at five"
         assert len(row.surface_forms) == 8, "surface forms should stop at eight"
         assert row.surface_forms[0] == "form 1"
+
+    # The same spelling seen again is counted but not listed again.
+    async with session_scope() as db:
+        for i in range(13, 16):
+            await record_candidate(db, tenant_id, dimension_id, name, surface="form 1", lang="uz", post_id=i)
+            await db.flush()
+
+    async with session_scope() as db:
+        row = await db.scalar(
+            select(TagCandidate).where(TagCandidate.tenant_id == tenant_id, TagCandidate.name == name)
+        )
+        assert row.count == 15
+        assert row.surface_forms.count("form 1") == 1, "a repeated spelling must not be appended"
         await db.execute(
             delete(TagCandidate).where(TagCandidate.tenant_id == tenant_id, TagCandidate.name == name)
         )

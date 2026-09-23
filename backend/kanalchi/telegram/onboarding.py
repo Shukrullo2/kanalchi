@@ -20,7 +20,9 @@ from kanalchi.core import storage
 from kanalchi.core.db import session_scope
 from kanalchi.core.logging import get_logger
 from kanalchi.core.models import Channel, Tenant
+from kanalchi.core.redis import get_redis
 from kanalchi.core.settings import get_settings
+from kanalchi.text.slug import slugify
 
 log = get_logger(__name__)
 
@@ -95,6 +97,20 @@ async def resolve_channel(
         ch.backfill_total_estimate = total
         if not tenant.title:
             tenant.title = entity.title or ""
+        # A channel onboarded without a domain of its own was given a placeholder under the
+        # platform domain; now that its username is known, take that instead if it is free.
+        if (tenant.settings or {}).get("auto_domain") and entity.username:
+            wanted = slugify(entity.username)
+            candidate = f"{wanted}.{get_settings().tenant_base_domain}"
+            taken = await db.scalar(
+                select(Tenant.id).where(
+                    (Tenant.domain == candidate) | (Tenant.slug == wanted), Tenant.id != tenant_id
+                )
+            )
+            if wanted and not taken and tenant.domain != candidate:
+                old_domain = tenant.domain
+                tenant.slug, tenant.domain = wanted, candidate
+                await get_redis().delete(f"tenant:host:{old_domain}", f"tls:ask:{old_domain}")
         if ch.noforwards:
             tenant.settings = {**(tenant.settings or {}), "media_policy": "link_only"}
         await db.flush()

@@ -115,7 +115,11 @@ A good extra dimension is:
 - something many posts have a value for,
 - a short noun phrase, not a sentiment or a quality judgement.
 
-Keys are snake_case and start with `custom_`. Labels are written in Uzbek, Russian and English."""
+Keys are snake_case and start with `custom_`.
+
+Labels and descriptions are written in Uzbek Latin, Russian and English. The description is one
+sentence a reader sees under the group's title on the public index, so write each language for that
+reader — idiomatic in its own right, not a word-for-word rendering of the English."""
 
 
 def discovery_user(channel: dict[str, Any], samples: list[str]) -> str:
@@ -149,7 +153,9 @@ Rules you must obey:
   an existing tag, and add new aliases to them instead of creating a near-duplicate.
 - `merged_candidates` must list the candidate names you folded into each tag, spelled as they were given.
 - Every candidate must appear exactly once across `merged_candidates` and `dropped_candidates`.
-- Labels: uz is Uzbek Latin, ru is Russian, en is English. Use the conventional local name, not a literal translation."""
+- Labels: uz is Uzbek Latin, ru is Russian, en is English. Use the conventional local name, not a literal translation.
+- Descriptions: one short line saying what the tag is, written in all three languages. The reader sees
+  it in their own language only, so each one must stand on its own."""
 
 
 def taxonomy_user(

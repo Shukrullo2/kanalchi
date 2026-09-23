@@ -22,7 +22,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <h1 className="text-xl font-semibold tracking-tight">Kanalchi</h1>
           <p className="mt-1 text-sm text-muted-foreground">{t("needLogin")}</p>
         </div>
-        <TelegramLogin botUsername={widget?.bot_username ?? null} dev={process.env.NODE_ENV === "development"} />
+        <TelegramLogin
+          botUsername={widget?.bot_username ?? null}
+          dev={process.env.NODE_ENV === "development"}
+          notConfigured="The login bot is not set up for this domain."
+        />
       </main>
     );
   }

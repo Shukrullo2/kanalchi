@@ -11,6 +11,7 @@ from kanalchi.api.routers import (
     admin,
     auth,
     chat,
+    graph,
     internal,
     onboarding,
     studio,
@@ -44,7 +45,7 @@ app = FastAPI(
     lifespan=lifespan,
     default_response_class=ORJSONResponse,
     docs_url="/api/docs" if get_settings().is_dev else None,
-    openapi_url="/api/openapi.json",
+    openapi_url="/api/openapi.json" if get_settings().is_dev else None,
 )
 
 app.include_router(internal.router)
@@ -53,6 +54,7 @@ app.include_router(admin.router)
 app.include_router(onboarding.router)
 app.include_router(viewer.router)
 app.include_router(tags.router)
+app.include_router(graph.router)
 app.include_router(chat.router)
 app.include_router(studio.router)
 app.include_router(webhooks.router)
@@ -65,13 +67,17 @@ async def healthz() -> dict:
 
 @app.middleware("http")
 async def strip_client_tenant_headers(request: Request, call_next):  # noqa: ANN001, ANN201
-    # Never trust x-tenant-* from the public internet: Caddy is in front, but belt and braces.
+    """Never trust x-tenant-* from the public internet.
+
+    Caddy already drops the header on the way in (Caddyfile: `header_up -X-Tenant-Host`); this
+    is the second line. Anything that arrived through a proxy carries X-Forwarded-For, whereas the
+    Next.js server calls the API directly and does not. In development the Next dev server *is*
+    a proxy (next.config rewrites /api/* and adds X-Forwarded-For), so the check is skipped there.
+    """
     if (
         "x-tenant-host" in request.headers
-        and request.client
-        and request.client.host not in {"127.0.0.1", "::1"}
+        and "x-forwarded-for" in request.headers
+        and not get_settings().is_dev
     ):
-        fwd = request.headers.get("x-forwarded-for")
-        if fwd:  # came through Caddy from a browser → drop the header
-            request.scope["headers"] = [(k, v) for k, v in request.scope["headers"] if k != b"x-tenant-host"]
+        request.scope["headers"] = [(k, v) for k, v in request.scope["headers"] if k != b"x-tenant-host"]
     return await call_next(request)

@@ -1,0 +1,61 @@
+/* The index in the map's frame: the cloud under the floating header, the
+   controls in the same floating panel. Panel and toggle styles come from
+   `components/graph/graph.css`; this is only the stage. */
+
+.tags-frame {
+  --graph-top: 4.75rem;
+  --graph-gap: 0.75rem;
+  /* The packed cloud is laid out at about this width-to-height; the stage
+     caps its width so it also fits the height of the screen. */
+  --cloud-aspect: 1.8;
+}
+
+.tags-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: auto;
+  background: radial-gradient(ellipse at 50% 40%, color-mix(in srgb, var(--surface) 55%, var(--background)) 0%, var(--background) 70%);
+}
+.tags-stage-inner {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--graph-top) 1.25rem 1.5rem;
+  transition: padding-left 0.2s;
+}
+/* With the panel out, the cloud centres in what is left of the screen. */
+@media (min-width: 40rem) {
+  .tags-frame[data-open="true"] .tags-stage-inner { padding-left: calc(21rem + 2 * var(--graph-gap) + 1.25rem); }
+}
+.tags-stage .tag-cloud-packed {
+  width: min(100%, calc((100vh - var(--graph-top) - 3rem) * var(--cloud-aspect)));
+  margin: 0 auto;
+}
+.tags-stage .tag-cloud-small { width: 100%; max-width: 40rem; padding-bottom: 3rem; }
+.tags-empty { margin: 0; color: var(--muted-foreground); font-size: 0.9rem; }
+
+.tags-frame-about { margin: 0 0 0.6rem; font-size: 0.8rem; line-height: 1.45; color: var(--muted-foreground); }
+/* The tab row wraps inside the panel instead of scrolling sideways. */
+.tags-frame-tabs nav { flex-wrap: wrap; overflow: visible; margin: 0; padding: 0; }
+.tags-frame-tabs .pill { padding: 0.3rem 0.65rem; font-size: 0.78rem; }
+
+.tags-frame-results { list-style: none; margin: 0.5rem 0 0; padding: 0; max-height: 40vh; overflow: auto; }
+.tags-frame-results li { border-top: 1px solid var(--border); }
+.tags-frame-results li:first-child { border-top: 0; }
+.tags-frame-results a {
+  --tone: var(--muted-foreground);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.1rem;
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+.tags-frame-results a[data-tier="theme"] { --tone: var(--primary); }
+.tags-frame-results a[data-tier="entity"] { --tone: var(--accent); }
+.tags-frame-results a i { width: 0.5rem; height: 0.5rem; border-radius: 9999px; background: var(--tone); flex: none; }
+.tags-frame-results a span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tags-frame-results a b { font-weight: 500; font-size: 0.75rem; color: var(--muted-foreground); }
+.tags-frame-results a:hover span { color: var(--accent); }

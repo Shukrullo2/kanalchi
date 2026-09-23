@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { toneVar } from "@/lib/dimensions";
 import { monthLabel } from "@/lib/format";
@@ -21,6 +22,7 @@ export function Histogram({
   tone?: string | null;
   locale?: string;
 }) {
+  const caption = useTranslations("common")("postsPerMonth");
   const [hover, setHover] = useState<number | null>(null);
   if (data.length < 2) return null;
 
@@ -31,7 +33,7 @@ export function Histogram({
 
   return (
     <figure className="m-0">
-      <div className="flex h-16 items-end gap-[2px]" role="img" aria-label="posts per month">
+      <div className="flex h-16 items-end gap-[2px]" role="img" aria-label={caption}>
         {data.map((d, i) => (
           <button
             key={d.month}

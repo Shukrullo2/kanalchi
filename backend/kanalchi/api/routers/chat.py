@@ -54,6 +54,8 @@ async def create_session(
 ) -> dict:
     if body.kind == "research" and (user is None or user.tenant_id != tenant.id):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "research chat is for channel members")
+    if tenant.status == "paused":
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "this channel is paused")
     if not (tenant.settings or {}).get("chat_enabled", True):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "chat is disabled for this channel")
 

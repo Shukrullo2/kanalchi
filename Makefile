@@ -50,7 +50,7 @@ gen-keys: ## Print fresh APP_MASTER_KEY / SESSION_SECRET
 deploy: ## Build and (re)start the production stack
 	$(COMPOSE) build
 	$(COMPOSE) up -d migrate
-	$(COMPOSE) up -d
+	$(COMPOSE) up -d --remove-orphans
 logs: ## Tail production logs
 	$(COMPOSE) logs -f --tail=200
 ps: ## Production stack status

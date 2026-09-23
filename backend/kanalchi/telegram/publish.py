@@ -47,8 +47,24 @@ async def _load_media(tenant_id: int, media: list[dict[str, Any]]) -> list[tuple
     return out
 
 
-async def publish_draft(draft_id: int) -> dict[str, Any]:
-    """Send a draft to the channel. Idempotent: an already published draft is not sent twice."""
+def _slot(value: datetime | str | None) -> int | None:
+    """A schedule as whole UTC seconds, so a job can be matched to the schedule it was queued for."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = datetime.fromisoformat(value)
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return int(value.timestamp())
+
+
+async def publish_draft(draft_id: int, scheduled_at: datetime | str | None = None) -> dict[str, Any]:
+    """Send a draft to the channel. Idempotent: an already published draft is not sent twice.
+
+    `scheduled_at` is the schedule this job was queued for. A queued job cannot be withdrawn, so
+    cancelling or re-scheduling a post changes the row instead, and the stale job finds it no
+    longer matches and steps aside.
+    """
     import httpx
 
     from kanalchi.api.routers.webhooks import tenant_bot
@@ -59,6 +75,10 @@ async def publish_draft(draft_id: int) -> dict[str, Any]:
             raise PublishError("draft not found")
         if draft.status == "published":
             return {"skipped": "already published", "message_id": draft.published_tg_message_id}
+        if draft.status not in {"scheduled", "publishing"}:
+            return {"skipped": f"draft is {draft.status}, not waiting to be sent"}
+        if scheduled_at is not None and _slot(scheduled_at) != _slot(draft.scheduled_at):
+            return {"skipped": "superseded by a newer schedule"}
         tenant = await db.get(Tenant, draft.tenant_id)
         channel = await db.scalar(select(Channel).where(Channel.tenant_id == draft.tenant_id))
         if tenant is None or channel is None or not tenant.bot_token_enc:
@@ -69,6 +89,7 @@ async def publish_draft(draft_id: int) -> dict[str, Any]:
             "media": list(draft.media or []),
             "disable_preview": bool(draft.disable_preview),
         }
+        suggested = bool(draft.suggested_tags)
         db.expunge_all()
 
     from kanalchi.core.crypto import decrypt
@@ -150,8 +171,62 @@ async def publish_draft(draft_id: int) -> dict[str, Any]:
                 idea.status = "published"
 
     await _notify(tenant, channel, draft_id, message.message_id)
+    if suggested:
+        from kanalchi.jobs import publish_jobs
+
+        await publish_jobs.file_tags.configure(schedule_in={"seconds": 45}).defer_async(draft_id=draft_id)
     log.info("publish.sent", draft_id=draft_id, message_id=message.message_id)
     return {"published": True, "message_id": message.message_id}
+
+
+async def file_suggested_tags(draft_id: int) -> int | None:
+    """Attach the draft's suggested tags to the post the listener stored for it.
+    None means the post is not in the archive yet; a number is how many tags were filed."""
+    from kanalchi.core.models import Post, PostTag, Tag
+
+    async with session_scope() as db:
+        draft = await db.get(Draft, draft_id)
+        if draft is None or not draft.published_tg_message_id:
+            return 0
+        slugs = [t.get("slug") for t in (draft.suggested_tags or []) if isinstance(t, dict) and t.get("slug")]
+        if not slugs:
+            return 0
+        channel = await db.scalar(select(Channel).where(Channel.tenant_id == draft.tenant_id))
+        if channel is None:
+            return 0
+        post_id = await db.scalar(
+            select(Post.id).where(
+                Post.channel_id == channel.id, Post.tg_message_id == draft.published_tg_message_id
+            )
+        )
+        if post_id is None:
+            return None
+        tag_ids = (
+            await db.scalars(
+                select(Tag.id).where(
+                    Tag.tenant_id == draft.tenant_id, Tag.slug.in_(slugs), Tag.status == "active"
+                )
+            )
+        ).all()
+        existing = set((await db.scalars(select(PostTag.tag_id).where(PostTag.post_id == post_id))).all())
+        filed = 0
+        for tag_id in tag_ids:
+            if tag_id not in existing:
+                db.add(
+                    PostTag(
+                        post_id=post_id,
+                        tag_id=tag_id,
+                        tenant_id=draft.tenant_id,
+                        confidence=1.0,
+                        source="manual",
+                    )
+                )
+                filed += 1
+    if filed:
+        from kanalchi.jobs import index_jobs
+
+        await index_jobs.recompute_counts.defer_async(tenant_id=draft.tenant_id)
+    return filed
 
 
 async def _fetch(httpx_module: Any, url: str) -> bytes:

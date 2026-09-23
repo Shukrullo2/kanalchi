@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_DEV_SESSION_SECRET = "dev-only-change-me"
 
 
 class Settings(BaseSettings):
@@ -20,6 +22,9 @@ class Settings(BaseSettings):
 
     # --- domains ---
     admin_host: str = "admin.localhost"
+    # Channels onboarded without a domain of their own live under <slug>.<platform_domain>.
+    # Unset, it is the admin host minus its first label: admin.example.uz gives example.uz.
+    platform_domain: str | None = None
     public_ip: str | None = None
     public_scheme: str = "https"
     public_port: int | None = None  # dev: 8443 (Caddy); prod: None
@@ -27,7 +32,7 @@ class Settings(BaseSettings):
     # --- secrets ---
     app_master_key: str | None = None
     app_master_key_prev: str | None = None
-    session_secret: str = "dev-only-change-me"
+    session_secret: str = _DEV_SESSION_SECRET
     session_ttl_days: int = 30
 
     # --- telegram ---
@@ -92,9 +97,31 @@ class Settings(BaseSettings):
             return [int(x) for x in v.replace(";", ",").split(",") if x.strip()]
         return list(v)  # type: ignore[arg-type]
 
+    @model_validator(mode="after")
+    def _prod_requires_real_secrets(self) -> Settings:
+        if self.env != "prod":
+            return self
+        missing = []
+        if not self.app_master_key:
+            missing.append("APP_MASTER_KEY")
+        if self.session_secret == _DEV_SESSION_SECRET or len(self.session_secret) < 32:
+            missing.append("SESSION_SECRET (>= 32 random chars)")
+        if missing:
+            raise ValueError(
+                "APP_ENV=prod but insecure configuration: set " + ", ".join(missing) + " (make gen-keys)"
+            )
+        return self
+
     @property
     def is_dev(self) -> bool:
         return self.env != "prod"
+
+    @property
+    def tenant_base_domain(self) -> str:
+        if self.platform_domain:
+            return self.platform_domain.lower().strip(".")
+        _, _, rest = self.admin_host.partition(".")
+        return rest or self.admin_host
 
     @property
     def libpq_dsn(self) -> str:

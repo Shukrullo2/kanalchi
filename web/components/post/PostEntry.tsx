@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { EyeIcon } from "@/components/Icons";
 import { TagRef } from "@/components/tags/TagChip";
 import { byTier, tierOf } from "@/lib/dimensions";
@@ -23,6 +24,9 @@ export function PostEntry({
   /** Position in a ranked list, shown as a badge on the card. */
   rank?: number;
 }) {
+  // `useTranslations` reads from the server on a page and from the provider
+  // inside `Timeline`, so one entry serves both trees.
+  const t = useTranslations("post");
   const plain = stripTags(post.html ?? post.text);
   const { lead, rest } = split(plain);
   const thumb = post.media.find((m) => m.thumb_url || m.url);
@@ -68,8 +72,8 @@ export function PostEntry({
                 {compactNumber(post.views)}
               </span>
             ) : null}
-            {post.media.length > 1 ? <span>{post.media.length} files</span> : null}
-            {post.poll ? <span>Poll</span> : null}
+            {post.media.length > 1 ? <span>{t("files", { count: post.media.length })}</span> : null}
+            {post.poll ? <span>{t("poll")}</span> : null}
           </div>
         </div>
       </div>
