@@ -138,6 +138,12 @@ another project: Postgres, Redis, MinIO, the API and the web app, every port bou
 nothing spends on indexing. Set `DEPLOY_COMPOSE=compose.reader.yml` in `infra/.env` and the
 deploy script uses it; images come from CI and are never built on the droplet.
 
+On a droplet of its own, add `COMPOSE_PROFILES=edge` to `infra/.env` instead of using host
+nginx: a Caddy container takes ports 80/443 and issues certificates itself, for `ADMIN_HOST`
+and, on demand, for every channel domain the admin panel has registered and verified (plus
+its `www.` alias and `<slug>.PLATFORM_DOMAIN`). That is what lets one deployment serve many
+channels on their own domains without touching the server per channel.
+
 ### What each service costs in memory
 
 Limits in `infra/compose.yml`: Postgres 2 GB, worker-telegram 1.2 GB, API and worker-index

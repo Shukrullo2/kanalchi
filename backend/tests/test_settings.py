@@ -9,3 +9,4 @@ from kanalchi.core.settings import Settings
 def test_admin_tg_ids_parse_from_env(monkeypatch, raw, expected):
     monkeypatch.setenv("ADMIN_TG_IDS", raw)
     assert Settings(_env_file=None).admin_tg_ids == expected
+

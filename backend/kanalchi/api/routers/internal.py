@@ -44,9 +44,13 @@ async def health(db: AsyncSession = Depends(get_db)) -> dict:
 async def tls_ask(domain: str = Query(...), db: AsyncSession = Depends(get_db)) -> Response:
     """Caddy calls this before issuing a certificate. 200 = allowed, anything else = refused."""
     s = get_settings()
-    domain = domain.lower().strip()
+    domain = domain.lower().strip().strip(".")
     if domain == s.admin_host:
         return Response(status_code=200)
+    # www.<channel domain> gets a certificate too, so the redirect to the bare domain is served
+    # over HTTPS; the channel itself is only ever registered without it.
+    if domain.startswith("www."):
+        domain = domain[4:]
     r = get_redis()
     cached = await r.get(f"tls:ask:{domain}")
     if cached is not None:

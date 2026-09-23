@@ -1,5 +1,6 @@
+# Let's Encrypt needs no contact address; renewals are automatic. (An empty `email` line
+# is a parse error, so none is set.)
 {
-	email {$ACME_EMAIL}
 	on_demand_tls {
 		ask http://api:8000/internal/tls/ask
 	}
@@ -52,11 +53,14 @@
 	import app
 }
 
-# Every tenant domain: the certificate is issued on demand once the ask endpoint approves it.
+# Every tenant domain: the certificate is issued on demand once the ask endpoint approves it
+# (a registered, verified channel domain, its www. alias, or <slug>.PLATFORM_DOMAIN).
 https:// {
 	tls {
 		on_demand
 	}
+	@www header_regexp www Host ^www\.(.+)$
+	redir @www https://{re.www.1}{uri} permanent
 	import app
 }
 

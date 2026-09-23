@@ -28,6 +28,24 @@ x-backend: &backend
   logging: *logging
 
 services:
+  # TLS at the edge for a droplet of its own (COMPOSE_PROFILES=edge in infra/.env): certificates
+  # for the admin host and, on demand, for every channel domain the API approves. On a droplet
+  # shared with another project, leave the profile off and use the host nginx site instead.
+  caddy:
+    image: caddy:2
+    profiles: ["edge"]
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      ADMIN_HOST: ${ADMIN_HOST}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [web, api]
+    restart: unless-stopped
+    logging: *logging
+    deploy: { resources: { limits: { memory: 128M } } }
+
   web:
     image: kanalchi/web:latest
     build: { context: ../web }
@@ -135,6 +153,8 @@ services:
     restart: "no"
 
 volumes:
+  caddy_data:
+  caddy_config:
   pg_data:
   redis_data:
   minio_data:
