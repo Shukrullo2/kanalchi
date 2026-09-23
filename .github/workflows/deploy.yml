@@ -41,7 +41,14 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - name: Deploy to the droplet
+      - uses: actions/checkout@v4
+      - name: Build images
+        # Built here rather than on the droplet, which is too small to run a Next.js build
+        # next to the apps it serves.
+        run: |
+          docker build -t kanalchi/backend:latest backend
+          docker build -t kanalchi/web:latest web
+      - name: Ship images and deploy
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
         run: |
@@ -54,5 +61,6 @@ jobs:
           # Pinned host key: a changed key fails the deploy instead of trusting a stranger.
           echo '46.101.205.214 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFWCURPxEd4Bs6kIuIhblgYqSKKc1nGt2P1ky45iKLhz' > ~/.ssh/known_hosts
           # The key is installed with a forced command, so this can only run deploy.sh.
-          ssh -i ~/.ssh/deploy -o IdentitiesOnly=yes -o ServerAliveInterval=30 \
-            root@46.101.205.214 "deploy ${{ github.sha }}"
+          docker save kanalchi/backend:latest kanalchi/web:latest | gzip -1 | \
+            ssh -i ~/.ssh/deploy -o IdentitiesOnly=yes -o ServerAliveInterval=30 \
+              root@46.101.205.214 "load ${{ github.sha }}"

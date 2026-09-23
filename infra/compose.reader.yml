@@ -1,0 +1,138 @@
+# Reader-only production stack for a small droplet shared with other projects.
+#
+# What runs: Postgres, Redis, MinIO, the API and the web app. What does not: Caddy (the host's
+# nginx terminates TLS, see infra/nginx/kanalchi-reader.conf) and the three job workers, so the
+# archive is served as it was imported and nothing spends on indexing. Every port is bound to
+# 127.0.0.1; nginx is the only way in. Sized for ~2 GB of RAM next to another app.
+#
+# Images are built in CI (or by hand) and loaded, never built on the droplet:
+#   docker compose -f infra/compose.reader.yml --env-file infra/.env up -d --no-build
+name: kanalchi
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "3" }
+
+x-backend: &backend
+  image: kanalchi/backend:latest
+  build: { context: ../backend }
+  env_file: .env
+  environment:
+    APP_ENV: ${APP_ENV:-prod}
+    DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    REDIS_URL: redis://redis:6379/0
+    S3_ENDPOINT: http://minio:9000
+    S3_ACCESS_KEY: ${MINIO_ROOT_USER}
+    S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+  restart: unless-stopped
+  logging: *logging
+
+services:
+  web:
+    image: kanalchi/web:latest
+    build: { context: ../web }
+    environment:
+      API_INTERNAL_URL: http://api:8000
+      ADMIN_HOST: ${ADMIN_HOST}
+      REVALIDATE_SECRET: ${SESSION_SECRET}
+      NODE_OPTIONS: --max-old-space-size=256
+    ports: ["127.0.0.1:3100:3000"]
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
+    logging: *logging
+    deploy: { resources: { limits: { memory: 384M } } }
+
+  api:
+    <<: *backend
+    command: uvicorn kanalchi.api.main:app --host 0.0.0.0 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips '*'
+    ports: ["127.0.0.1:8100:8000"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      minio: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/internal/health',timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+    deploy: { resources: { limits: { memory: 448M } } }
+
+  migrate:
+    <<: *backend
+    command: kanalchi migrate
+    restart: "no"
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    command: >
+      postgres -c shared_buffers=160MB -c effective_cache_size=512MB -c work_mem=8MB
+      -c maintenance_work_mem=64MB -c max_connections=50 -c random_page_cost=1.1
+      -c log_min_duration_statement=1000
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    logging: *logging
+    deploy: { resources: { limits: { memory: 640M } } }
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 48mb --maxmemory-policy volatile-ttl --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    logging: *logging
+    deploy: { resources: { limits: { memory: 96M } } }
+
+  minio:
+    image: quay.io/minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports: ["127.0.0.1:9100:9000"]
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    logging: *logging
+    deploy: { resources: { limits: { memory: 320M } } }
+
+  minio-init:
+    image: quay.io/minio/mc
+    depends_on:
+      minio: { condition: service_healthy }
+    entrypoint: ["/bin/sh", "/init.sh"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - ./scripts/minio-init.sh:/init.sh:ro
+    restart: "no"
+
+volumes:
+  pg_data:
+  redis_data:
+  minio_data:

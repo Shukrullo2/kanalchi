@@ -129,6 +129,15 @@ Workers do not hot-reload; the deploy recreates every container whose image chan
 signatures in the queue are the usual reason a worker fails right after a deploy; the admin
 pipeline monitor flags jobs that never start.
 
+### Small droplet: reader-only stack
+
+`infra/compose.reader.yml` serves the public reader site on about 1.5 GB of RAM next to
+another project: Postgres, Redis, MinIO, the API and the web app, every port bound to
+`127.0.0.1`. The host's own nginx terminates TLS with certbot and proxies to them
+(`infra/nginx/kanalchi-reader.conf`). No workers run, so the archive is served as imported and
+nothing spends on indexing. Set `DEPLOY_COMPOSE=compose.reader.yml` in `infra/.env` and the
+deploy script uses it; images come from CI and are never built on the droplet.
+
 ### What each service costs in memory
 
 Limits in `infra/compose.yml`: Postgres 2 GB, worker-telegram 1.2 GB, API and worker-index
