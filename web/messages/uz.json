@@ -11,6 +11,7 @@
     "graph": "Xarita"
   },
   "common": {
+    "madeBy": "Shukrullo tomonidan yaratilgan",
     "loading": "Yuklanmoqda…",
     "signIn": "Telegram orqali kirish",
     "signOut": "Chiqish",

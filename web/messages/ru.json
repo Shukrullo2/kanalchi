@@ -11,6 +11,7 @@
     "graph": "Карта"
   },
   "common": {
+    "madeBy": "Сделано Shukrullo",
     "loading": "Загрузка…",
     "signIn": "Войти через Telegram",
     "signOut": "Выйти",

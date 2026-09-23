@@ -50,6 +50,7 @@ export default async function TenantLayout({ children }: { children: React.React
           <Link href="/studio" className="link-quiet ml-auto">
             {nav("studio")}
           </Link>
+          <span>{common("madeBy")}</span>
         </div>
       </footer>
     </div>

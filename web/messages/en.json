@@ -11,6 +11,7 @@
     "graph": "Map"
   },
   "common": {
+    "madeBy": "Made by Shukrullo",
     "loading": "Loading…",
     "signIn": "Sign in with Telegram",
     "signOut": "Sign out",

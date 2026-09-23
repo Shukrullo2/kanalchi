@@ -1,0 +1,58 @@
+name: CI and deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# One deploy at a time; a newer push waits for the running one rather than cancelling it
+# half-way through a migration.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: backend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - run: uv run ruff check . && uv run ruff format --check .
+      # Database-backed tests skip themselves when no dev database is reachable.
+      - run: uv run pytest -q
+
+  web:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: web } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: web/package-lock.json }
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  deploy:
+    needs: [backend, web]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Deploy to the droplet
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          if [ -z "$DEPLOY_SSH_KEY" ]; then
+            echo "::notice::DEPLOY_SSH_KEY is not set yet; skipping deploy (see README → Auto-deploy)."
+            exit 0
+          fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          # Pinned host key: a changed key fails the deploy instead of trusting a stranger.
+          echo '46.101.205.214 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFWCURPxEd4Bs6kIuIhblgYqSKKc1nGt2P1ky45iKLhz' > ~/.ssh/known_hosts
+          # The key is installed with a forced command, so this can only run deploy.sh.
+          ssh -i ~/.ssh/deploy -o IdentitiesOnly=yes -o ServerAliveInterval=30 \
+            root@46.101.205.214 "deploy ${{ github.sha }}"

@@ -103,15 +103,31 @@ or the default session secret, so a half-filled `.env` fails loudly instead of r
 4. The blogger opens `https://<their-domain>/studio` and signs in with Telegram; they are let
    in if the channel's bot sees them as a channel admin, or if you invited them by Telegram id.
 
-### 5. Updating
+### 5. Updating: auto-deploy on push
+
+Every push to `main` runs `.github/workflows/deploy.yml`: backend lint and tests, web lint and
+production build, then an SSH call to the droplet that runs `infra/scripts/deploy.sh <sha>`.
+The script fetches that commit (the repo is public, so no credentials), rebuilds, runs
+migrations, restarts what changed and waits for the API to report healthy. Pull requests get
+the checks without the deploy. A deploy never runs twice at once.
+
+One-time setup, done on the server:
 
 ```bash
-cd /opt/kanalchi && git pull && make deploy
+ssh-keygen -t ed25519 -N "" -C github-actions-deploy -f /root/.ssh/kanalchi_deploy
+echo "command=\"/opt/kanalchi/infra/scripts/deploy.sh\",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding $(cat /root/.ssh/kanalchi_deploy.pub)" >> /root/.ssh/authorized_keys
+cat /root/.ssh/kanalchi_deploy   # paste into GitHub → Settings → Secrets → Actions → DEPLOY_SSH_KEY
+rm /root/.ssh/kanalchi_deploy
 ```
 
-Workers do not hot-reload; `make deploy` recreates every container whose image changed.
-Old job signatures in the queue are the usual reason a worker fails right after a deploy; the
-admin pipeline monitor flags jobs that never start.
+The forced command means that key can run the deploy script and nothing else. The server's
+host key is pinned in the workflow, so a rebuilt droplet needs its new key pasted there.
+Until the secret exists the deploy step is skipped with a notice. To deploy by hand:
+`/opt/kanalchi/infra/scripts/deploy.sh`.
+
+Workers do not hot-reload; the deploy recreates every container whose image changed. Old job
+signatures in the queue are the usual reason a worker fails right after a deploy; the admin
+pipeline monitor flags jobs that never start.
 
 ### What each service costs in memory
 

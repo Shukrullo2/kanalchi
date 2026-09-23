@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Admin" };
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const [me, t] = await Promise.all([getMe(true), getTranslations("admin")]);
+  const [me, t, common] = await Promise.all([getMe(true), getTranslations("admin"), getTranslations("common")]);
 
   if (!me.authenticated || me.role !== "admin") {
     const widget = await apiFetchOrNull<{ bot_username: string | null }>("/api/auth/widget", { admin: true });
@@ -46,10 +46,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       />
       <main className="shell-wide flex-1 py-7 sm:py-9">{children}</main>
       <footer className="mt-12 border-t">
-        <div className="shell-wide py-5 text-xs text-muted-foreground">
+        <div className="shell-wide flex items-center gap-5 py-5 text-xs text-muted-foreground">
           <Link href="/jobs" className="link-quiet">
             Job queue
           </Link>
+          <span className="ml-auto">{common("madeBy")}</span>
         </div>
       </footer>
     </div>
