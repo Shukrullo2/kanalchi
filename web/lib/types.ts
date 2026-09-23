@@ -275,6 +275,9 @@ export type SearchResult = {
   count: number;
   offset: number;
   has_more: boolean;
+  /** How many posts matched, up to the search pool; with `total_capped`, "at least this many". */
+  total?: number | null;
+  total_capped?: boolean;
   facets?: Record<string, { slug: string; name: string; labels: Record<string, string>; count: number }[]>;
 };
 

@@ -223,7 +223,22 @@
     "newest": "newest",
     "oldest": "oldest",
     "views": "views",
-    "reactions": "reactions"
+    "reactions": "reactions",
+    "period": "Period",
+    "anyTime": "Any time",
+    "days30": "30 days",
+    "year1": "Past year",
+    "type": "Type",
+    "anyType": "All",
+    "typeText": "Text",
+    "typePhoto": "Photo",
+    "typeAlbum": "Album",
+    "typeVideo": "Video",
+    "filters": "Filters",
+    "results": "{count, plural, one {# post} other {# posts}}",
+    "resultsCapped": "{count}+ posts",
+    "more": "{count} more",
+    "less": "show less"
   },
   "chat": {
     "placeholder": "Ask about this channel…",

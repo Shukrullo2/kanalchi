@@ -222,11 +222,16 @@ async def tag_detail(
     }
 
 
+# Facets and the result count describe everything that matched, not just the page on screen,
+# so the first request fetches a pool this deep and pages are cut from it.
+SEARCH_POOL = 200
+
+
 @router.get("/search")
 async def search(
     q: str | None = None,
     tags: list[str] | None = Query(default=None),
-    media_kind: str | None = None,
+    media_kind: str | None = Query(default=None, max_length=16),
     date_from: datetime | None = None,
     date_to: datetime | None = None,
     sort: str = Query("relevance", pattern="^(relevance|newest|oldest|views|reactions)$"),
@@ -236,27 +241,39 @@ async def search(
     tenant: Tenant = Depends(require_tenant),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    hits = await hybrid.search(
-        tenant.id,
-        q,
-        tag_slugs=tags or [],
-        date_from=date_from,
-        date_to=date_to,
-        media_kind=media_kind,
-        sort=sort,  # type: ignore[arg-type]
-        limit=limit,
-        offset=offset,
-    )
-    ids = [h[0] for h in hits]
-    items = await _posts_by_ids(db, tenant, ids)
+    args = {
+        "tag_slugs": tags or [],
+        "date_from": date_from,
+        "date_to": date_to,
+        "media_kind": media_kind,
+        "sort": sort,
+    }
+    pooled = offset + limit <= SEARCH_POOL
+    if pooled:
+        # One query answers the page, the count and the facets; its cost barely depends on
+        # the limit, since every leg of the hybrid search is already capped.
+        hits = await hybrid.search(tenant.id, q, **args, limit=SEARCH_POOL + 1, offset=0)  # type: ignore[arg-type]
+        page = hits[offset : offset + limit]
+        has_more = len(hits) > offset + limit
+        total = min(len(hits), SEARCH_POOL)
+        capped = len(hits) > SEARCH_POOL
+    else:
+        page = await hybrid.search(tenant.id, q, **args, limit=limit + 1, offset=offset)  # type: ignore[arg-type]
+        has_more = len(page) > limit
+        page = page[:limit]
+        hits, total, capped = page, None, True
+    items = await _posts_by_ids(db, tenant, [h[0] for h in page])
     out: dict[str, Any] = {
         "items": items,
         "count": len(items),
         "offset": offset,
-        "has_more": len(items) == limit,
+        "has_more": has_more,
+        # How many matched, up to the pool; `total_capped` means "at least this many".
+        "total": total,
+        "total_capped": capped,
     }
     if with_facets:
-        out["facets"] = await hybrid.facets(tenant.id, ids)
+        out["facets"] = await hybrid.facets(tenant.id, [h[0] for h in hits[:SEARCH_POOL]])
     return out
 
 

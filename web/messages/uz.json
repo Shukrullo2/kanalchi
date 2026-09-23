@@ -223,7 +223,22 @@
     "newest": "yangilari",
     "oldest": "eskilari",
     "views": "ko‘rishlar",
-    "reactions": "reaksiyalar"
+    "reactions": "reaksiyalar",
+    "period": "Davr",
+    "anyTime": "Butun davr",
+    "days30": "30 kun",
+    "year1": "Bir yil",
+    "type": "Turi",
+    "anyType": "Hammasi",
+    "typeText": "Matn",
+    "typePhoto": "Rasm",
+    "typeAlbum": "Albom",
+    "typeVideo": "Video",
+    "filters": "Filtrlar",
+    "results": "{count} ta post",
+    "resultsCapped": "{count}+ ta post",
+    "more": "yana {count}",
+    "less": "kamroq"
   },
   "chat": {
     "placeholder": "Kanal haqida so‘rang…",

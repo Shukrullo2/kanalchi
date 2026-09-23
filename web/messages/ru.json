@@ -223,7 +223,22 @@
     "newest": "новые",
     "oldest": "старые",
     "views": "просмотры",
-    "reactions": "реакции"
+    "reactions": "реакции",
+    "period": "Период",
+    "anyTime": "За всё время",
+    "days30": "30 дней",
+    "year1": "За год",
+    "type": "Тип",
+    "anyType": "Все",
+    "typeText": "Текст",
+    "typePhoto": "Фото",
+    "typeAlbum": "Альбом",
+    "typeVideo": "Видео",
+    "filters": "Фильтры",
+    "results": "{count, plural, one {# пост} few {# поста} many {# постов} other {# поста}}",
+    "resultsCapped": "{count}+ постов",
+    "more": "ещё {count}",
+    "less": "свернуть"
   },
   "chat": {
     "placeholder": "Спросите о канале…",

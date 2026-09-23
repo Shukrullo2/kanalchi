@@ -3,6 +3,7 @@ import { useTranslations } from "next-intl";
 import { EyeIcon } from "@/components/Icons";
 import { TagRef } from "@/components/tags/TagChip";
 import { byTier, tierOf } from "@/lib/dimensions";
+import { tagLabel } from "@/lib/labels";
 import { compactNumber, fullDate, postDate } from "@/lib/format";
 import type { PostOut } from "@/lib/types";
 
@@ -31,8 +32,16 @@ export function PostEntry({
   const { lead, rest } = split(plain);
   const thumb = post.media.find((m) => m.thumb_url || m.url);
   // Only the tags a reader scans by; language and media kind are filing details.
+  // The same name can be filed under two groups (a company that is also a source); show it once.
+  const seen = new Set<string>();
   const subjects = byTier(post.tags ?? [])
     .filter((t) => tierOf(t.dimension) !== "meta")
+    .filter((t) => {
+      const name = tagLabel(t, locale).toLowerCase();
+      if (seen.has(name)) return false;
+      seen.add(name);
+      return true;
+    })
     .slice(0, 3);
 
   return (

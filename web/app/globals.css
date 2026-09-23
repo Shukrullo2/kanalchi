@@ -419,6 +419,117 @@
   }
   @media (min-width: 46rem) { .archive-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (min-width: 72rem) { .archive-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  /* Next to a sidebar the grid has less room: two columns at most. */
+  @media (min-width: 72rem) { .archive-grid-narrow { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  /* Every card in a row ends on the same line, whatever wraps it (a bare article, an <li>),
+     with its date and views pinned to the bottom by `.card-foot`. */
+  .archive-grid > * { display: flex; flex-direction: column; min-width: 0; }
+  .archive-grid > * > .card-link,
+  .archive-grid > * > .card { flex: 1; }
+  .archive-grid .card-link { display: flex; flex-direction: column; }
+  .archive-grid .card-link > .card { flex: 1; }
+
+  /* --- Search filters -------------------------------------------------------- */
+  .search-filters { display: flex; flex-direction: column; gap: 1.1rem; font-size: 0.875rem; }
+  .search-filters section h2,
+  .search-filters summary {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+  .search-filters section h2 { margin-bottom: 0.5rem; }
+  .search-options { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+  .search-options button {
+    border: 1px solid var(--border);
+    border-radius: 9999px;
+    padding: 0.25rem 0.7rem;
+    font-size: 0.8125rem;
+    color: var(--muted-foreground);
+    background: transparent;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+  }
+  .search-options button:hover { color: var(--foreground); border-color: var(--border-strong); }
+  .search-options button[data-active="true"] {
+    color: var(--primary-foreground);
+    background: var(--primary);
+    border-color: var(--primary);
+    font-weight: 600;
+  }
+  .search-filters details { border-top: 1px solid var(--border); padding-top: 0.9rem; }
+  .search-filters summary {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    cursor: pointer;
+    list-style: none;
+    margin-bottom: 0.4rem;
+  }
+  .search-filters summary::-webkit-details-marker { display: none; }
+  .search-filters summary::after {
+    content: "";
+    margin-left: auto;
+    width: 0.4rem;
+    height: 0.4rem;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: rotate(-45deg);
+    transition: transform 0.15s;
+  }
+  .search-filters details[open] > summary::after { transform: rotate(45deg); }
+  .search-filters summary:hover { color: var(--foreground); }
+  .search-filters ul { display: flex; flex-direction: column; gap: 0.05rem; }
+  .search-filters li button {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 0.55rem;
+    border-radius: 0.4rem;
+    padding: 0.3rem 0.4rem;
+    text-align: left;
+    color: var(--muted-foreground);
+    transition: background 0.15s, color 0.15s;
+  }
+  .search-filters li button:hover { background: var(--surface-2); color: var(--foreground); }
+  .search-filters li button[data-active="true"] { color: var(--foreground); font-weight: 600; }
+  .search-check {
+    flex: none;
+    width: 0.9rem;
+    height: 0.9rem;
+    border-radius: 0.25rem;
+    border: 1.5px solid var(--border-strong);
+    display: grid;
+    place-items: center;
+  }
+  .search-filters li button[data-active="true"] .search-check { background: var(--primary); border-color: var(--primary); }
+  .search-filters li button[data-active="true"] .search-check::after {
+    content: "";
+    width: 0.3rem;
+    height: 0.55rem;
+    margin-top: -0.1rem;
+    border-right: 2px solid var(--primary-foreground);
+    border-bottom: 2px solid var(--primary-foreground);
+    transform: rotate(45deg);
+  }
+  .search-more { margin: 0.3rem 0 0 0.4rem; font-size: 0.8125rem; color: var(--primary); }
+  .search-more:hover { text-decoration: underline; }
+  .search-count {
+    margin-left: 0.4rem;
+    display: inline-grid;
+    place-items: center;
+    min-width: 1.15rem;
+    height: 1.15rem;
+    padding-inline: 0.3rem;
+    border-radius: 9999px;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    font-size: 0.6875rem;
+    font-weight: 700;
+  }
+  @media (max-width: 63.99rem) {
+    .search-filters { padding: 1rem; border: 1px solid var(--border); border-radius: 0.75rem; background: var(--surface); }
+  }
 
   /* --- The index as a cloud of words ---------------------------------------
      `lib/wordcloud.ts` packs the words; each is placed here at its share of the
