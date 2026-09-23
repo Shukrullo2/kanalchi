@@ -20,6 +20,7 @@ log = get_logger(__name__)
 
 RRF_K = 60
 POOL = 60
+TRGM_THRESHOLD = 0.6
 
 Sort = Literal["relevance", "newest", "oldest", "views", "reactions"]
 
@@ -71,7 +72,10 @@ trgm AS (
            row_number() OVER (ORDER BY word_similarity(:query_norm, p.text_norm) DESC) AS rank
     FROM posts p
     JOIN filtered f ON f.id = p.id
-    WHERE :query_norm <> '' AND word_similarity(:query_norm, p.text_norm) > 0.6
+    -- `<%` is word_similarity >= pg_trgm.word_similarity_threshold (set to TRGM_THRESHOLD for
+    -- this transaction) and, unlike the function call, can use the trigram index. Comparing
+    -- the function against a constant scanned every post: 4.5 s per query on a 2-vCPU host.
+    WHERE :query_norm <> '' AND :query_norm <% p.text_norm
     ORDER BY word_similarity(:query_norm, p.text_norm) DESC
     LIMIT :pool
 ),
@@ -192,6 +196,10 @@ async def search(
         "rrf_k": RRF_K,
     }
     async with session_scope() as db:
+        await db.execute(
+            text("SELECT set_config('pg_trgm.word_similarity_threshold', :t, true)"),
+            {"t": str(TRGM_THRESHOLD)},
+        )
         rows = (await db.execute(SEARCH_SQL, params)).all()
     return [(r[0], float(r[1])) for r in rows]
 

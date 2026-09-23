@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Annotated
 
 from pydantic import Field, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 _DEV_SESSION_SECRET = "dev-only-change-me"
 
@@ -39,7 +40,9 @@ class Settings(BaseSettings):
     tg_api_id: int | None = None
     tg_api_hash: str | None = None
     platform_bot_token: str | None = None
-    admin_tg_ids: list[int] = Field(default_factory=list)
+    # NoDecode: the env value is a comma list (or empty), split by the validator below.
+    # Without it an empty `ADMIN_TG_IDS=` is JSON-decoded first and startup fails.
+    admin_tg_ids: Annotated[list[int], NoDecode] = Field(default_factory=list)
 
     # --- ai ---
     anthropic_api_key: str | None = None

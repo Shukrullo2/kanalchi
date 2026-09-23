@@ -31,6 +31,10 @@ main() {
   flock -w 900 9 || { echo "deploy: another deploy is still running" >&2; exit 1; }
 
   cd "$root"
+  # Remember the images this deploy replaces; only those are removed afterwards. The droplet
+  # may host other projects, so no global `docker image prune`.
+  local old_images
+  old_images="$(docker image ls -q kanalchi/backend kanalchi/web 2>/dev/null | sort -u || true)"
   if [[ "$mode" == load ]]; then
     echo "deploy: loading images from stdin"
     gunzip | docker load
@@ -63,7 +67,8 @@ main() {
   for i in $(seq 1 60); do
     if [[ "$("${dc[@]}" ps api --format '{{.Health}}' 2>/dev/null)" == "healthy" ]]; then
       echo "deploy: api healthy on $(git rev-parse --short HEAD) ($compose)"
-      docker image prune -f >/dev/null 2>&1 || true
+      local id
+      for id in $old_images; do docker image rm "$id" >/dev/null 2>&1 || true; done
       "${dc[@]}" ps --format 'table {{.Service}}\t{{.Status}}'
       return 0
     fi
