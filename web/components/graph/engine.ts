@@ -71,6 +71,8 @@ export class GraphEngine {
   private wmax = 1;
   private sim: Simulation<GNode, GLink> | null = null;
   private transform: ZoomTransform = zoomIdentity;
+  /** Strips of the canvas covered by floating UI (header, controls panel); fitting avoids them. */
+  private insets = { top: 0, right: 0, bottom: 0, left: 0 };
   private hovered: GNode | null = null;
   private selected: GNode | null = null;
   private quad: Quadtree<GNode> | null = null;
@@ -186,10 +188,14 @@ export class GraphEngine {
       const wmax = this.wmax;
       sim
         .force("link", forceLink<GNode, GLink>(this.links).distance((l) => 40 + 120 * (1 - l.w / wmax)).strength((l) => 0.15 + 0.5 * (l.w / wmax)))
-        .force("charge", forceManyBody<GNode>().strength(-260))
+        // Repulsion only reaches so far: unbounded, it flung loosely connected tags a thousand
+        // units out and the fit had to zoom out until the core was an unreadable knot.
+        .force("charge", forceManyBody<GNode>().strength(-260).distanceMax(320))
         .force("center", forceCenter(0, 0).strength(0.05))
-        .force("x", forceX<GNode>(0).strength(0.03))
-        .force("y", forceY<GNode>(0).strength(0.035))
+        // Pull harder along the screen's short side so the map takes the screen's shape: tall on a
+        // phone held upright, wide on a desktop.
+        .force("x", forceX<GNode>(0).strength((n) => (n.deg ? 0.03 : 0.12) * this.aspectPull()[0]))
+        .force("y", forceY<GNode>(0).strength((n) => (n.deg ? 0.035 : 0.12) * this.aspectPull()[1]))
         .force("collide", forceCollide<GNode>((n) => n.r + 10));
     }
     sim.alphaDecay(mode === "constellation" ? 0.028 : 0.03).on("tick", () => {
@@ -203,6 +209,9 @@ export class GraphEngine {
     // Settle before the first frame, then let it breathe.
     sim.stop();
     sim.tick(Math.max(60, Math.min(160, Math.round(30000 / Math.max(1, this.nodes.length)))));
+    // A fresh layout (nothing carried over from the previous graph) is turned so its long axis
+    // runs along the screen's long axis: an upright phone gets a tall map, a desktop a wide one.
+    if (!this.nodes.some((n) => this.prev.has(n.id))) this.alignToScreen();
     this.quad = null;
     this.fit(false);
     this.paint();
@@ -218,6 +227,7 @@ export class GraphEngine {
 
   resize() {
     const box = (this.canvas.parentElement ?? this.canvas).getBoundingClientRect();
+    const [oldW, oldH] = [this.W, this.H];
     this.W = Math.max(1, box.width);
     this.H = Math.max(1, box.height);
     this.dpr = window.devicePixelRatio || 1;
@@ -225,7 +235,58 @@ export class GraphEngine {
     this.canvas.height = Math.round(this.H * this.dpr);
     this.canvas.style.width = `${this.W}px`;
     this.canvas.style.height = `${this.H}px`;
-    this.paint();
+    if (this.autoFit) this.fit(false);
+    else if (oldW && oldH) this.shiftBy((this.W - oldW) / 2, (this.H - oldH) / 2);
+    else this.paint();
+  }
+
+  /** Tell the engine which edges are covered by floating UI, so a fit centres on what is visible. */
+  setInsets(insets: { top: number; right: number; bottom: number; left: number }) {
+    const prev = this.insets;
+    if (["top", "right", "bottom", "left"].every((k) => Math.abs(prev[k as keyof typeof prev] - insets[k as keyof typeof insets]) < 1)) return;
+    this.insets = insets;
+    if (this.autoFit) this.fit(true);
+    // Keep whatever the reader was looking at in the middle of the space that is left.
+    else this.shiftBy((insets.left - prev.left - insets.right + prev.right) / 2, (insets.top - prev.top - insets.bottom + prev.bottom) / 2);
+  }
+
+  /** Rotate node positions about their centroid so the principal axis matches the view's long side. */
+  private alignToScreen() {
+    const ns = this.nodes;
+    if (ns.length < 3) return;
+    let mx = 0, my = 0;
+    for (const n of ns) { mx += n.x; my += n.y; }
+    mx /= ns.length; my /= ns.length;
+    let sxx = 0, syy = 0, sxy = 0;
+    for (const n of ns) {
+      const dx = n.x - mx, dy = n.y - my;
+      sxx += dx * dx; syy += dy * dy; sxy += dx * dy;
+    }
+    const major = 0.5 * Math.atan2(2 * sxy, sxx - syy); // angle of the layout's long axis
+    const vw = this.W - this.insets.left - this.insets.right;
+    const vh = this.H - this.insets.top - this.insets.bottom;
+    const target = vh > vw * 1.15 ? Math.PI / 2 : 0;
+    const a = target - major;
+    const cos = Math.cos(a), sin = Math.sin(a);
+    for (const n of ns) {
+      const dx = n.x - mx, dy = n.y - my;
+      n.x = mx + dx * cos - dy * sin;
+      n.y = my + dx * sin + dy * cos;
+    }
+  }
+
+  /** [x, y] multipliers for the centring forces from the visible area's shape. */
+  private aspectPull(): [number, number] {
+    const vw = Math.max(1, this.W - this.insets.left - this.insets.right);
+    const vh = Math.max(1, this.H - this.insets.top - this.insets.bottom);
+    const a = Math.max(0.6, Math.min(1.8, Math.sqrt(vh / vw)));
+    return [a, 1 / a];
+  }
+
+  private shiftBy(dx: number, dy: number) {
+    if (!dx && !dy) return this.paint();
+    const t = zoomIdentity.translate(this.transform.x + dx, this.transform.y + dy).scale(this.transform.k);
+    select(this.canvas).call(this.zoomer.transform, t);
   }
 
   zoomBy(factor: number) {
@@ -239,23 +300,40 @@ export class GraphEngine {
     const q = (a: number[], p: number) => a[Math.min(a.length - 1, Math.floor(p * a.length))];
     const lo = this.mode === "constellation" ? 0.02 : 0.03;
     const x0 = q(xs, lo), x1 = q(xs, 1 - lo), y0 = q(ys, lo), y1 = q(ys, 1 - lo);
-    const pad = this.mode === "constellation" ? 20 : 90;
-    const k = Math.max(0.12, Math.min(this.mode === "constellation" ? 9 : 3, 0.9 / Math.max((x1 - x0 + pad) / this.W, (y1 - y0 + pad) / this.H)));
-    const t = zoomIdentity.translate((-(x0 + x1) / 2) * k, (-(y0 + y1) / 2) * k).scale(k);
+    // Room in screen pixels for the labels that hang off the outermost nodes.
+    const padX = this.mode === "constellation" ? 40 : 150;
+    const padY = this.mode === "constellation" ? 40 : 60;
+    const { top, right, bottom, left } = this.insets;
+    // Fit into the part of the canvas no panel covers; a panel wider than that leaves the whole canvas.
+    const vw = this.W - left - right > 120 ? this.W - left - right : this.W;
+    const vh = this.H - top - bottom > 120 ? this.H - top - bottom : this.H;
+    const cx = vw === this.W ? this.W / 2 : left + vw / 2;
+    const cy = vh === this.H ? this.H / 2 : top + vh / 2;
+    const k = Math.max(
+      0.12,
+      Math.min(
+        this.mode === "constellation" ? 9 : 3,
+        Math.max(40, vw - padX) / Math.max(1, x1 - x0),
+        Math.max(40, vh - padY) / Math.max(1, y1 - y0),
+      ),
+    );
+    // Standard d3-zoom mapping, screen = translate + k * graph: the zoom behaviour anchors wheel
+    // and pinch on the pointer with exactly this formula, so nothing else may offset the view.
+    const t = zoomIdentity.translate(cx - ((x0 + x1) / 2) * k, cy - ((y0 + y1) / 2) * k).scale(k);
     const sel = select(this.canvas);
     if (animate) sel.transition().duration(500).call(this.zoomer.transform, t);
     else sel.call(this.zoomer.transform, t);
   }
 
   toScreen(n: GNode): [number, number] {
-    return [this.W / 2 + this.transform.x + n.x * this.transform.k, this.H / 2 + this.transform.y + n.y * this.transform.k];
+    return [this.transform.x + n.x * this.transform.k, this.transform.y + n.y * this.transform.k];
   }
 
   private hit(mx: number, my: number): GNode | null {
     if (!this.quad) this.quad = quadtree<GNode>(this.nodes, (n) => n.x, (n) => n.y);
     const k = this.transform.k;
-    const gx = (mx - this.W / 2 - this.transform.x) / k;
-    const gy = (my - this.H / 2 - this.transform.y) / k;
+    const gx = (mx - this.transform.x) / k;
+    const gy = (my - this.transform.y) / k;
     const n = this.quad.find(gx, gy, 24 / k);
     if (!n) return null;
     return Math.hypot(n.x - gx, n.y - gy) <= n.r + 4 / k ? n : null;
@@ -301,7 +379,7 @@ export class GraphEngine {
     const focus = this.hovered ?? this.selected;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
-    ctx.translate(W / 2 + this.transform.x, H / 2 + this.transform.y);
+    ctx.translate(this.transform.x, this.transform.y);
     ctx.scale(k, k);
     ctx.lineCap = "round";
 
@@ -380,35 +458,84 @@ export class GraphEngine {
     }
     ctx.globalAlpha = 1;
 
-    // Labels. Subjects keep theirs; posts earn one by zoom or by being near the focus.
+    // Labels. Subjects keep theirs; posts earn one by zoom or by being near the focus. They are
+    // placed most important first and a label that would overlap one already placed is skipped,
+    // so the first view reads as names rather than a knot, and zooming in reveals the rest.
+    // The focus and its neighbours are always labelled.
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
     ctx.lineJoin = "round";
     ctx.strokeStyle = palette.halo;
-    for (const n of this.nodes) {
-      if (focus && n !== focus && !focus.nb.has(n)) continue;
+    const tx = this.transform.x;
+    const ty = this.transform.y;
+    const placed = new LabelGrid();
+    const order = this.nodes
+      .filter((n) => !focus || n === focus || focus.nb.has(n))
+      .sort((a, b) => labelRank(b, focus) - labelRank(a, focus));
+    for (const n of order) {
       const text = this.events.labelOf(n);
       if (!text) continue;
+      const pinned = n === focus || (!!focus && focus.nb.has(n));
+      let fs: number;
+      let label = text;
       if (n.kind === "tag") {
         const screen = this.mode === "tags" ? Math.max(10, Math.min(17, 8 + n.r * 0.45)) : Math.max(10, Math.min(15, 7 + n.r * 0.5));
-        const always = this.mode === "tags" || n.rank < LABELLED_HUBS || n === focus || (!!focus && focus.nb.has(n));
+        const always = this.mode === "tags" || n.rank < LABELLED_HUBS || pinned;
         const shrink = always ? 1 : Math.min(1, k / 1.4);
         if (!always && screen * shrink < 8.5) continue;
-        const fs = (screen * shrink) / k;
+        fs = (screen * shrink) / k;
         ctx.font = `600 ${fs}px ${palette.font}`;
         ctx.fillStyle = this.tone(n);
-        ctx.lineWidth = 3 / k;
-        ctx.strokeText(text, n.x, n.y + n.r + 2 / k);
-        ctx.fillText(text, n.x, n.y + n.r + 2 / k);
       } else if (k > 2.2 || (focus && (n === focus || (k > 1.1 && focus.nb.has(n))))) {
-        const fs = 9 / k;
+        fs = 9 / k;
         ctx.font = `500 ${fs}px ${palette.font}`;
         ctx.fillStyle = palette.post;
-        ctx.lineWidth = 3 / k;
-        const s = text.length > 42 ? `${text.slice(0, 41)}…` : text;
-        ctx.strokeText(s, n.x, n.y + n.r + 1.5 / k);
-        ctx.fillText(s, n.x, n.y + n.r + 1.5 / k);
-      }
+        label = text.length > 42 ? `${text.slice(0, 41)}…` : text;
+      } else continue;
+      const gap = (n.kind === "tag" ? 2 : 1.5) / k;
+      const w = ctx.measureText(label).width * k;
+      const sx = tx + n.x * k;
+      const sy = ty + (n.y + n.r + gap) * k;
+      const box: Box = [sx - w / 2 - 2, sy - 1, sx + w / 2 + 2, sy + fs * k + 1];
+      if (!pinned && placed.hits(box)) continue;
+      placed.add(box);
+      ctx.lineWidth = 3 / k;
+      ctx.strokeText(label, n.x, n.y + n.r + gap);
+      ctx.fillText(label, n.x, n.y + n.r + gap);
+    }
+  }
+}
+
+type Box = [number, number, number, number];
+
+/** Which labels win a collision: the focus, then its neighbours, then subjects by size, then posts. */
+function labelRank(n: GNode, focus: GNode | null): number {
+  if (n === focus) return 1e9;
+  if (focus && focus.nb.has(n)) return 1e8 + n.r;
+  return (n.kind === "tag" ? 1e6 : 0) + n.r;
+}
+
+/** Screen-space boxes of placed labels, bucketed so each overlap test looks at a few neighbours. */
+class LabelGrid {
+  private cells = new Map<string, Box[]>();
+  private static SIZE = 96;
+  private keys([x0, y0, x1, y1]: Box): string[] {
+    const s = LabelGrid.SIZE;
+    const out: string[] = [];
+    for (let gx = Math.floor(x0 / s); gx <= Math.floor(x1 / s); gx++)
+      for (let gy = Math.floor(y0 / s); gy <= Math.floor(y1 / s); gy++) out.push(`${gx},${gy}`);
+    return out;
+  }
+  hits(b: Box): boolean {
+    for (const key of this.keys(b))
+      for (const o of this.cells.get(key) ?? []) if (b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1]) return true;
+    return false;
+  }
+  add(b: Box) {
+    for (const key of this.keys(b)) {
+      const list = this.cells.get(key);
+      if (list) list.push(b);
+      else this.cells.set(key, [b]);
     }
   }
 }

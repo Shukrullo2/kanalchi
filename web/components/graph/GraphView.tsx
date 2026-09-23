@@ -123,6 +123,43 @@ export function GraphView({
       engineRef.current = null;
     };
   }, []);
+  // The canvas fills the window under floating UI: the header and zoom buttons along the top,
+  // the controls panel on the left (a bottom sheet on a phone) and the legend along the bottom.
+  // The engine fits the graph into what is left, so the first view is not half hidden.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const measure = () => {
+      const box = canvas.getBoundingClientRect();
+      const gap = 8;
+      // Hidden elements (the legend on a phone, a closed panel) measure 0×0 at the origin.
+      const visible = (el: Element | null | undefined) => {
+        const r = el?.getBoundingClientRect();
+        return r && r.width > 0 && r.height > 0 ? r : null;
+      };
+      const root = canvas.closest(".graph");
+      const hud = visible(root?.querySelector(".graph-hud"));
+      const legend = visible(root?.querySelector(".graph-legend"));
+      const panel = document.getElementById("graph-controls");
+      const shown = panel?.dataset.open === "true" ? visible(panel) : null;
+      const sheet = shown && isNarrow();
+      engineRef.current?.setInsets({
+        top: hud ? Math.max(0, hud.bottom - box.top + gap) : 0,
+        right: 0,
+        bottom: Math.max(
+          legend ? box.bottom - legend.top + gap : 0,
+          sheet ? box.bottom - shown.top + gap : 0,
+        ),
+        left: shown && !sheet ? Math.max(0, shown.right - box.left + gap) : 0,
+      });
+    };
+    measure();
+    const watch = new ResizeObserver(measure);
+    const panel = document.getElementById("graph-controls");
+    if (panel) watch.observe(panel);
+    watch.observe(canvas);
+    return () => watch.disconnect();
+  }, [open]);
   useEffect(() => {
     engineRef.current?.setGraph(graph, mode);
   }, [graph, mode]);
