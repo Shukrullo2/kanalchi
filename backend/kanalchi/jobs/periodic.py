@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from procrastinate.exceptions import AlreadyEnqueued
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from kanalchi.core.db import session_scope
 from kanalchi.core.logging import get_logger
@@ -28,7 +28,12 @@ async def _fan_out_resync(days: int) -> int:
             await db.execute(
                 select(Channel.id)
                 .join(Tenant, Tenant.id == Channel.tenant_id)
-                .where(Channel.backfill_status == "done", Tenant.status.in_(["active", "indexing"]))
+                .where(
+                    Channel.backfill_status == "done",
+                    Tenant.status.in_(["active", "indexing"]),
+                    # The archive plan is a snapshot: nothing new is read after the import.
+                    or_(Tenant.plan.is_(None), Tenant.plan != "archive"),
+                )
             )
         ).all()
     n = 0

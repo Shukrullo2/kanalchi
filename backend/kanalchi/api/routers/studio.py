@@ -10,7 +10,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, status
 from procrastinate.exceptions import AlreadyEnqueued
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from kanalchi.api.auth import SessionData
 from kanalchi.api.deps import enforce_same_origin, get_db, require_member, require_tenant
 from kanalchi.core import storage
+from kanalchi.core.billing import has_writing_tools
 from kanalchi.core.jobs import create_job_run
 from kanalchi.core.limits import get_budget
 from kanalchi.core.logging import get_logger
@@ -39,10 +40,21 @@ from kanalchi.jobs import publish_jobs
 from kanalchi.telegram.formatting import DraftValidationError, length, validate, web_safe_html
 
 log = get_logger(__name__)
+# The parts of the studio that are the premium plan's "writing tools". The dashboard, settings
+# and team stay open on every plan, since a basic channel still has a bot and members to manage.
+WRITING_TOOL_PATHS = {"ideas", "drafts", "uploads", "voice"}
+
+
+async def require_writing_tools(request: Request, tenant: Tenant = Depends(require_tenant)) -> None:
+    head = request.url.path.removeprefix("/api/studio/").split("/", 1)[0]
+    if head in WRITING_TOOL_PATHS and not has_writing_tools(tenant):
+        raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED, "the writing tools are on the premium plan")
+
+
 router = APIRouter(
     prefix="/api/studio",
     tags=["studio"],
-    dependencies=[Depends(require_member), Depends(enforce_same_origin)],
+    dependencies=[Depends(require_member), Depends(enforce_same_origin), Depends(require_writing_tools)],
 )
 
 UPLOAD_MAX_BYTES = 50 * 1024 * 1024
@@ -511,6 +523,8 @@ async def overview(tenant: Tenant = Depends(require_tenant), db: AsyncSession = 
         "studio_spent_usd": budget.spent_usd,
         "has_voice_profile": bool((tenant.settings or {}).get("voice_profile")),
         "bot_username": tenant.bot_username,
+        "plan": tenant.plan,
+        "writing_tools": has_writing_tools(tenant),
     }
 
 

@@ -15,6 +15,7 @@ from sse_starlette.sse import EventSourceResponse
 from kanalchi.ai.chat.agent import budget_note, run_turn
 from kanalchi.api.auth import SessionData
 from kanalchi.api.deps import current_user, enforce_same_origin, get_db, require_tenant
+from kanalchi.core.billing import has_writing_tools
 from kanalchi.core.limits import check_chat_rate, check_platform_cap, ip_hash
 from kanalchi.core.logging import get_logger
 from kanalchi.core.models import ChatMessage, ChatSession, Post, Tenant
@@ -54,6 +55,8 @@ async def create_session(
 ) -> dict:
     if body.kind == "research" and (user is None or user.tenant_id != tenant.id):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "research chat is for channel members")
+    if body.kind == "research" and not has_writing_tools(tenant):
+        raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED, "the writing tools are on the premium plan")
     if tenant.status == "paused":
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "this channel is paused")
     if not (tenant.settings or {}).get("chat_enabled", True):

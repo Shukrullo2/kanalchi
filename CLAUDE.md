@@ -1,7 +1,9 @@
 # Kanalchi — working notes for Claude Code
 
 Multi-tenant "AI helper for Telegram bloggers". One deployment serves many channels; tenant = Host header.
-Roles: viewer (public), blogger (`/studio`, Telegram Login + channel-admin check), admin (ADMIN_HOST, allowlist).
+Roles: viewer (public), blogger (`/studio`, Telegram Login + channel-admin check), admin (ADMIN_HOST, allowlist),
+user (signed in on PLATFORM_DOMAIN `/start` to register a channel: `api/routers/signup.py`, plans in `core/billing.py`).
+Plans: archive (snapshot site) · basic (+ live updates) · premium (+ studio writing tools); payment is by hand in `/admin`.
 
 ## Layout
 - `backend/kanalchi/` — Python 3.12, uv. `core/` settings+db+models+crypto+pricing, `telegram/` Telethon pool + aiogram bots,

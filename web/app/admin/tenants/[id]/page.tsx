@@ -1,6 +1,7 @@
 import Link from "@/components/AppLink";
 import { notFound } from "next/navigation";
 import { ArrowLeftIcon, ExternalIcon } from "@/components/Icons";
+import { BillingPanel } from "@/components/admin/BillingPanel";
 import { DomainSettings } from "@/components/admin/DomainSettings";
 import { MembersPanel } from "@/components/admin/MembersPanel";
 import { PipelineMonitor } from "@/components/admin/PipelineMonitor";
@@ -9,7 +10,13 @@ import { TaxonomyVersions } from "@/components/admin/TaxonomyVersions";
 import { TenantActions } from "@/components/admin/TenantActions";
 import { apiFetchOrNull } from "@/lib/api";
 import { compactNumber } from "@/lib/format";
-import type { AdminTenant, Checklist, JobRunOut, MemberOut, TaxonomyVersionOut } from "@/lib/types";
+import type {
+  AdminTenant,
+  Checklist,
+  JobRunOut,
+  MemberOut,
+  TaxonomyVersionOut,
+} from "@/lib/types";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -19,29 +26,45 @@ export default async function TenantDetail({ params }: Props) {
   const { id } = await params;
   const [tenant, checklist, jobs, members, versions] = await Promise.all([
     apiFetchOrNull<AdminTenant>(`/api/admin/tenants/${id}`, { admin: true }),
-    apiFetchOrNull<Checklist>(`/api/admin/tenants/${id}/checklist`, { admin: true }),
-    apiFetchOrNull<JobRunOut[]>(`/api/admin/jobs?tenant_id=${id}&limit=20`, { admin: true }),
-    apiFetchOrNull<MemberOut[]>(`/api/admin/tenants/${id}/members`, { admin: true }),
-    apiFetchOrNull<TaxonomyVersionOut[]>(`/api/admin/tenants/${id}/taxonomy`, { admin: true }),
+    apiFetchOrNull<Checklist>(`/api/admin/tenants/${id}/checklist`, {
+      admin: true,
+    }),
+    apiFetchOrNull<JobRunOut[]>(`/api/admin/jobs?tenant_id=${id}&limit=20`, {
+      admin: true,
+    }),
+    apiFetchOrNull<MemberOut[]>(`/api/admin/tenants/${id}/members`, {
+      admin: true,
+    }),
+    apiFetchOrNull<TaxonomyVersionOut[]>(`/api/admin/tenants/${id}/taxonomy`, {
+      admin: true,
+    }),
   ]);
   if (!tenant) notFound();
 
   const activeVersion = checklist?.pipeline?.stages.taxonomy.done
-    ? (versions ?? []).find((v) => v.status === "applied")?.id ?? null
+    ? ((versions ?? []).find((v) => v.status === "applied")?.id ?? null)
     : null;
 
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/tenants" className="link-quiet mb-2 inline-flex items-center gap-1.5 text-sm">
+        <Link
+          href="/tenants"
+          className="link-quiet mb-2 inline-flex items-center gap-1.5 text-sm"
+        >
           <ArrowLeftIcon size={14} /> channels
         </Link>
         <div className="flex flex-wrap items-center gap-3">
           <StatusDot status={tenant.status} />
-          <h1 className="text-xl font-semibold tracking-tight">{tenant.domain}</h1>
+          <h1 className="text-xl font-semibold tracking-tight">
+            {tenant.domain}
+          </h1>
           <span className="chip">{tenant.status}</span>
           <span className="ml-auto flex items-center gap-4">
-            <Link href={`/tenants/${tenant.id}/index`} className="link-quiet text-sm">
+            <Link
+              href={`/tenants/${tenant.id}/index`}
+              className="link-quiet text-sm"
+            >
               Index →
             </Link>
             <a
@@ -58,10 +81,40 @@ export default async function TenantDetail({ params }: Props) {
 
       <dl className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
         {[
-          ["Channel", tenant.channel ? (tenant.channel.username ? `@${tenant.channel.username}` : tenant.channel.title) : "—"],
-          ["Subscribers", tenant.channel?.participants_count ? compactNumber(tenant.channel.participants_count) : "—"],
-          ["Bot", tenant.bot_username ? `@${tenant.bot_username}` : "none (platform bot signs in)"],
-          ["Domain", tenant.auto_domain ? "platform domain" : tenant.domain_verified_at ? "own, verified" : "own, unverified"],
+          [
+            "Channel",
+            tenant.channel
+              ? tenant.channel.username
+                ? `@${tenant.channel.username}`
+                : tenant.channel.title
+              : "—",
+          ],
+          [
+            "Subscribers",
+            tenant.channel?.participants_count
+              ? compactNumber(tenant.channel.participants_count)
+              : "—",
+          ],
+          [
+            "Bot",
+            tenant.bot_username
+              ? `@${tenant.bot_username}`
+              : "none (platform bot signs in)",
+          ],
+          [
+            "Domain",
+            tenant.auto_domain
+              ? "platform domain"
+              : tenant.domain_verified_at
+                ? "own, verified"
+                : "own, unverified",
+          ],
+          [
+            "Plan",
+            tenant.plan
+              ? `${tenant.plan} · ${tenant.subscription_status}`
+              : "not chosen",
+          ],
           ["Chat budget", `$${tenant.daily_chat_budget_usd}/day`],
           ["Studio budget", `$${tenant.daily_studio_budget_usd}/day`],
           ["Languages", tenant.locales.join(", ")],
@@ -88,12 +141,21 @@ export default async function TenantDetail({ params }: Props) {
 
       <TenantActions tenant={tenant} />
 
+      <BillingPanel tenant={tenant} />
+
       <div className="grid gap-4 lg:grid-cols-2">
-        <DomainSettings tenant={tenant} dnsDetail={checklist?.steps.domain.detail ?? null} />
+        <DomainSettings
+          tenant={tenant}
+          dnsDetail={checklist?.steps.domain.detail ?? null}
+        />
         <MembersPanel tenantId={tenant.id} initial={members ?? []} />
       </div>
 
-      <TaxonomyVersions tenantId={tenant.id} versions={versions ?? []} activeId={activeVersion} />
+      <TaxonomyVersions
+        tenantId={tenant.id}
+        versions={versions ?? []}
+        activeId={activeVersion}
+      />
 
       <section className="card-surface overflow-hidden">
         <h2 className="border-b px-4 py-3 text-sm font-medium">Recent jobs</h2>
@@ -110,13 +172,20 @@ export default async function TenantDetail({ params }: Props) {
                       : (j.progress?.message ?? j.progress?.stage ?? "—"))}
                 </span>
                 <span className="shrink-0 text-xs text-muted-foreground">
-                  {j.started_at ? new Date(j.started_at).toISOString().slice(5, 16).replace("T", " ") : "—"}
+                  {j.started_at
+                    ? new Date(j.started_at)
+                        .toISOString()
+                        .slice(5, 16)
+                        .replace("T", " ")
+                    : "—"}
                 </span>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="p-8 text-center text-sm text-muted-foreground">No jobs yet.</p>
+          <p className="p-8 text-center text-sm text-muted-foreground">
+            No jobs yet.
+          </p>
         )}
       </section>
     </div>

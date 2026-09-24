@@ -83,6 +83,17 @@ class Settings(BaseSettings):
     viewer_chat_per_visitor_day: int = 40
     viewer_chat_per_tenant_day: int = 300
 
+    # --- plans / billing (USD) ---
+    # Monthly subscription per plan; the admin collects payment by hand for now.
+    plan_archive_usd: float = 9.0
+    plan_basic_usd: float = 19.0
+    plan_premium_usd: float = 39.0
+    # The one-off onboarding price is the estimated AI cost of reading the archive, marked
+    # up, plus a base fee, never below the floor.
+    onboarding_base_usd: float = 5.0
+    onboarding_ai_markup: float = 2.0
+    onboarding_min_usd: float = 10.0
+
     # --- datastores ---
     database_url: str = "postgresql+psycopg://kanalchi:kanalchi@localhost:5433/kanalchi"
     redis_url: str = "redis://localhost:6380/0"
@@ -137,6 +148,17 @@ class Settings(BaseSettings):
             return self.platform_domain.lower().strip(".")
         _, _, rest = self.admin_host.partition(".")
         return rest or self.admin_host
+
+    @property
+    def platform_hosts(self) -> set[str]:
+        """Hosts that serve the platform's own front door (landing page and self-serve sign-up)."""
+        hosts: set[str] = set()
+        if self.platform_domain:
+            base = self.platform_domain.lower().strip(".")
+            hosts |= {base, f"www.{base}"}
+        if self.is_dev:
+            hosts.add("osor.localhost")  # what proxy.ts treats as the platform domain in development
+        return hosts
 
     @property
     def libpq_dsn(self) -> str:

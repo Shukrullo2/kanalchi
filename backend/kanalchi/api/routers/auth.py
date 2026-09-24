@@ -1,4 +1,5 @@
-"""Telegram Login Widget sign-in for admins (admin host) and bloggers (tenant hosts)."""
+"""Telegram Login Widget sign-in for admins (admin host), bloggers (tenant hosts) and
+prospective bloggers registering a channel (the platform domain)."""
 
 from __future__ import annotations
 
@@ -39,11 +40,11 @@ class TelegramLoginPayload(BaseModel):
 async def widget_info(ctx: TenantContext = Depends(get_tenant_ctx)) -> dict:
     """Which bot the Login Widget on this host must use."""
     s = get_settings()
-    if ctx.is_admin_host:
+    if ctx.is_admin_host or ctx.is_platform_host:
         bot = None
         if s.platform_bot_token:
             bot = (await _bot_username(s.platform_bot_token)) or None
-        return {"mode": "admin", "bot_username": bot}
+        return {"mode": "admin" if ctx.is_admin_host else "signup", "bot_username": bot}
     bot = ctx.tenant.bot_username if ctx.tenant else None
     if bot is None and s.platform_bot_token:
         # A channel without a bot of its own signs its bloggers in through the platform bot.
@@ -70,7 +71,7 @@ async def telegram_login(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     s = get_settings()
-    if ctx.is_admin_host:
+    if ctx.is_admin_host or ctx.is_platform_host:
         bot_token = s.platform_bot_token
     else:
         bot_token = decrypt(ctx.tenant.bot_token_enc) if ctx.tenant and ctx.tenant.bot_token_enc else None
@@ -111,6 +112,10 @@ async def telegram_login(
         if not allowed:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail="not a platform admin")
         role, tenant_id = "admin", None
+    elif ctx.is_platform_host:
+        # Anyone may register; the channel they add is checked separately.
+        await _mark_signed_up(db, user_id, now)
+        role, tenant_id = "user", None
     else:
         assert ctx.tenant is not None
         member = await db.scalar(
@@ -163,6 +168,12 @@ async def telegram_login(
     return {"ok": True, "role": role, "name": name}
 
 
+async def _mark_signed_up(db: AsyncSession, user_id: int, now: datetime) -> None:
+    user = await db.get(User, user_id)
+    if user is not None and user.signed_up_at is None:
+        user.signed_up_at = now
+
+
 class DevLogin(BaseModel):
     tg_user_id: int
     name: str = "Dev User"
@@ -175,7 +186,8 @@ async def dev_login(
     ctx: TenantContext = Depends(get_tenant_ctx),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Local development only: mint a session without Telegram (admin on the admin host, owner on a tenant host)."""
+    """Local development only: mint a session without Telegram (admin on the admin host, owner on
+    a tenant host, a plain user on the platform host)."""
     s = get_settings()
     if not s.is_dev:
         raise HTTPException(status.HTTP_404_NOT_FOUND)
@@ -188,6 +200,9 @@ async def dev_login(
     user_id = await db.scalar(stmt)
     if ctx.is_admin_host:
         role, tenant_id = "admin", None
+    elif ctx.is_platform_host:
+        await _mark_signed_up(db, user_id, datetime.now(UTC))
+        role, tenant_id = "user", None
     else:
         assert ctx.tenant is not None
         member = await db.scalar(
@@ -238,7 +253,11 @@ async def me(
     # A session minted on another host must not leak roles across domains.
     if ctx.is_admin_host and user.role != "admin":
         return {"authenticated": False}
-    if not ctx.is_admin_host and (ctx.tenant is None or user.tenant_id != ctx.tenant.id):
+    if ctx.is_platform_host and user.role != "user":
+        return {"authenticated": False}
+    if not (ctx.is_admin_host or ctx.is_platform_host) and (
+        ctx.tenant is None or user.tenant_id != ctx.tenant.id
+    ):
         return {"authenticated": False}
     return {
         "authenticated": True,

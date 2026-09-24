@@ -14,6 +14,7 @@ from kanalchi.api.routers import (
     graph,
     internal,
     onboarding,
+    signup,
     studio,
     tags,
     viewer,
@@ -52,6 +53,7 @@ app.include_router(internal.router)
 app.include_router(auth.router)
 app.include_router(admin.router)
 app.include_router(onboarding.router)
+app.include_router(signup.router)
 app.include_router(viewer.router)
 app.include_router(tags.router)
 app.include_router(graph.router)

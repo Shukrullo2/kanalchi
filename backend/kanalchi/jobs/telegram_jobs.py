@@ -77,6 +77,14 @@ async def channel_resolve(
         return out
 
 
+@app.task(queue="telegram", name="telegram.channel_preview", retry=1)
+async def channel_preview(tenant_id: int) -> dict:
+    """Size up a self-registered channel for its sign-up quote (no join, no import)."""
+    from kanalchi.telegram.onboarding import preview_channel
+
+    return await preview_channel(tenant_id)
+
+
 @app.task(queue="telegram", name="telegram.backfill_chunk", retry=2)
 async def backfill_chunk(channel_id: int) -> dict:
     from kanalchi.telegram.ingest import backfill_chunk as _chunk

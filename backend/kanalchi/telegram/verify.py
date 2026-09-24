@@ -11,6 +11,34 @@ def bot_chat_id(tg_channel_id: int) -> int:
     return int(f"-100{tg_channel_id}") if tg_channel_id > 0 else tg_channel_id
 
 
+def bare_channel_id(chat_id: int) -> int:
+    """The reverse: a Bot API chat id (-100…) back to the bare id the channels table stores."""
+    text = str(chat_id)
+    return int(text[4:]) if text.startswith("-100") else abs(chat_id)
+
+
+async def public_channel_info(bot_token: str, username: str) -> dict | None:
+    """What the Bot API tells anyone about a public channel: id, title, description, member count.
+    None when the username is not a channel the bot can see."""
+    try:
+        async with Bot(bot_token) as bot:
+            chat = await bot.get_chat(f"@{username}")
+            if chat.type != "channel":
+                return None
+            try:
+                members = await bot.get_chat_member_count(chat.id)
+            except Exception:  # noqa: BLE001
+                members = None
+    except Exception:  # noqa: BLE001
+        return None
+    return {
+        "tg_channel_id": bare_channel_id(chat.id),
+        "title": chat.title or "",
+        "about": chat.description,
+        "participants_count": members,
+    }
+
+
 async def is_channel_admin(bot_token: str, tg_channel_id: int, user_tg_id: int) -> bool:
     try:
         async with Bot(bot_token) as bot:

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, Numeric, String, Text
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -49,7 +49,24 @@ class Tenant(TimestampMixin, Base):
     daily_chat_budget_usd: Mapped[float] = mapped_column(Numeric(8, 2), default=5)
     daily_studio_budget_usd: Mapped[float] = mapped_column(Numeric(8, 2), default=20)
     settings: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
-    # settings keys: voice_profile, channel_profile, chat_persona, media_policy ('store'|'link_only'), theme, features
+    # settings keys: voice_profile, channel_profile, chat_persona, media_policy ('store'|'link_only'), theme, features,
+    # signup ({username, link, requested_at} for a channel that registered itself)
+
+    # --- self-serve sign-up and billing ---
+    # The person who registered the channel on the platform domain; admin-created tenants have none.
+    owner_user_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+    source: Mapped[str] = mapped_column(String(16), default="admin")  # admin | self
+    # archive: the imported history as a site, no updates. basic: plus live updates.
+    # premium: plus the studio's writing tools. NULL: not chosen yet.
+    plan: Mapped[str | None] = mapped_column(String(16))
+    subscription_status: Mapped[str] = mapped_column(String(16), default="none")
+    # none | pending (asked, unpaid) | active | past_due | cancelled
+    subscription_paid_until: Mapped[date | None] = mapped_column(Date)
+    # What the archive was quoted at: {posts, ai_usd, price_usd, source, computed_at}.
+    onboarding_quote: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    onboarding_paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     channel: Mapped[Channel | None] = relationship(back_populates="tenant", uselist=False)
 

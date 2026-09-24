@@ -38,7 +38,7 @@ def verify_telegram_login(data: dict[str, Any], bot_token: str, max_age_s: int =
 class SessionData:
     user_id: int
     tg_user_id: int
-    role: str  # admin | owner | editor
+    role: str  # admin | owner | editor | user (signed up on the platform domain)
     tenant_id: int | None
     name: str
     username: str | None = None

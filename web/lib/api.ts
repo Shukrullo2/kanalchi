@@ -3,16 +3,24 @@ import { cookies, headers } from "next/headers";
 import { ADMIN_HOST, API_INTERNAL_URL } from "./config";
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
     super(message);
   }
 }
 
 /** Server-side call to FastAPI. Carries the tenant host (set by proxy.ts) and the viewer's cookies. */
-export async function apiFetch<T>(path: string, init: RequestInit & { admin?: boolean } = {}): Promise<T> {
+export async function apiFetch<T>(
+  path: string,
+  init: RequestInit & { admin?: boolean } = {},
+): Promise<T> {
   const h = await headers();
   const c = await cookies();
-  const tenantHost = init.admin ? ADMIN_HOST : (h.get("x-tenant-host") ?? h.get("host")?.split(":")[0] ?? "");
+  const tenantHost = init.admin
+    ? ADMIN_HOST
+    : (h.get("x-tenant-host") ?? h.get("host")?.split(":")[0] ?? "");
   const res = await fetch(`${API_INTERNAL_URL}${path}`, {
     ...init,
     headers: {
@@ -33,11 +41,16 @@ export async function apiFetch<T>(path: string, init: RequestInit & { admin?: bo
   return (await res.json()) as T;
 }
 
-export async function apiFetchOrNull<T>(path: string, init: RequestInit & { admin?: boolean } = {}): Promise<T | null> {
+export async function apiFetchOrNull<T>(
+  path: string,
+  init: RequestInit & { admin?: boolean } = {},
+): Promise<T | null> {
   try {
     return await apiFetch<T>(path, init);
   } catch (e) {
-    if (e instanceof ApiError && (e.status === 401 || e.status === 403 || e.status === 404)) return null;
+    // 402: the plan does not include this (the studio's writing tools); the page shows the gate.
+    if (e instanceof ApiError && [401, 402, 403, 404].includes(e.status))
+      return null;
     throw e;
   }
 }

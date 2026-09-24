@@ -19,7 +19,7 @@ from telethon.tl import types as tl
 from kanalchi.core import storage
 from kanalchi.core.db import session_scope
 from kanalchi.core.logging import get_logger
-from kanalchi.core.models import Channel, Tenant
+from kanalchi.core.models import Channel, TelegramAccount, Tenant
 from kanalchi.core.redis import get_redis
 from kanalchi.core.settings import get_settings
 from kanalchi.text.slug import slugify
@@ -123,6 +123,71 @@ async def resolve_channel(
             "noforwards": ch.noforwards,
         }
     log.info("onboarding.channel_resolved", tenant_id=tenant_id, **out)
+    return out
+
+
+async def preview_channel(tenant_id: int) -> dict:
+    """Size up a channel that registered itself: subscribers and message count, read through any
+    active account without joining, so the sign-up page can quote the import. Fills the channel
+    row (but not its reader account: that is chosen when the admin starts the import)."""
+    from kanalchi.core.billing import quote_for_posts
+    from kanalchi.telegram.pool import get_pool
+
+    async with session_scope() as db:
+        tenant = await db.get(Tenant, tenant_id)
+        if tenant is None:
+            raise RuntimeError("tenant not found")
+        username = ((tenant.settings or {}).get("signup") or {}).get("username")
+        account_id = await db.scalar(
+            select(TelegramAccount.id).where(TelegramAccount.status == "active").order_by(TelegramAccount.id)
+        )
+    if not username:
+        return {"skipped": "no username"}
+    if account_id is None:
+        log.info("signup.preview.no_account", tenant_id=tenant_id)
+        return {"skipped": "no active account"}
+
+    pool = get_pool()
+    client = pool.client(account_id)
+    try:
+        async with pool.lock(account_id):
+            entity = await client.get_entity(username)
+            if not isinstance(entity, tl.Channel) or not entity.broadcast:
+                raise RuntimeError("the link does not point to a Telegram channel")
+            full = await client(functions.channels.GetFullChannelRequest(entity))
+            total = (await client.get_messages(entity, limit=0)).total
+    except FloodWaitError as e:
+        raise RuntimeError(f"Telegram asked to wait {e.seconds}s (FloodWait); retry later") from e
+    except (UsernameNotOccupiedError, ChannelPrivateError, ValueError) as e:
+        raise RuntimeError(f"cannot resolve channel: {type(e).__name__}") from e
+
+    async with session_scope() as db:
+        tenant = await db.get(Tenant, tenant_id)
+        assert tenant is not None
+        existing = await db.scalar(select(Channel).where(Channel.tg_channel_id == entity.id))
+        if existing and existing.tenant_id != tenant_id:
+            raise RuntimeError(f"channel already belongs to tenant {existing.tenant_id}")
+        ch = existing or await db.scalar(select(Channel).where(Channel.tenant_id == tenant_id))
+        if ch is None:
+            ch = Channel(tenant_id=tenant_id, tg_channel_id=entity.id)
+            db.add(ch)
+        ch.tg_channel_id = entity.id
+        ch.username = entity.username
+        ch.title = entity.title or ""
+        ch.about = full.full_chat.about
+        ch.participants_count = full.full_chat.participants_count
+        ch.backfill_total_estimate = total
+        ch.noforwards = bool(getattr(entity, "noforwards", False))
+        if not tenant.title:
+            tenant.title = entity.title or ""
+        tenant.onboarding_quote = quote_for_posts(total, source="telegram")
+        out = {
+            "tg_channel_id": entity.id,
+            "title": ch.title,
+            "total": total,
+            "quote": tenant.onboarding_quote,
+        }
+    log.info("signup.preview.done", tenant_id=tenant_id, total=total)
     return out
 
 

@@ -11,6 +11,10 @@ export type TenantPublic = {
   primary_lang: string;
   locales: string[];
   bot_username: string | null;
+  /** archive | basic | premium; null for a channel connected before plans existed. */
+  plan?: string | null;
+  /** Whether the studio's ideas, drafts, research and publishing are switched on. */
+  writing_tools?: boolean;
   post_count?: number;
   first_post_at?: string | null;
   last_post_at?: string | null;
@@ -19,7 +23,73 @@ export type TenantPublic = {
 
 export type Me =
   | { authenticated: false }
-  | { authenticated: true; role: "admin" | "owner" | "editor"; name: string; username?: string | null; photo_url?: string | null; tg_user_id: number };
+  | {
+      authenticated: true;
+      /** `user` is someone signed in on the platform domain to register a channel. */
+      role: "admin" | "owner" | "editor" | "user";
+      name: string;
+      username?: string | null;
+      photo_url?: string | null;
+      tg_user_id: number;
+    };
+
+export type PlanId = "archive" | "basic" | "premium";
+export type SubscriptionStatus = "none" | "pending" | "active" | "past_due" | "cancelled";
+
+export type Plan = { id: PlanId; monthly_usd: number; live_updates: boolean; writing_tools: boolean };
+
+export type OnboardingQuote = {
+  posts: number;
+  ai_usd: number;
+  price_usd: number;
+  /** telegram (measured) | manual (typed in by the blogger) | sample */
+  source: string;
+  computed_at: string;
+};
+
+export type PlanCatalogue = {
+  currency: string;
+  plans: Plan[];
+  onboarding: { base_usd: number; ai_markup: number; min_usd: number; sample: OnboardingQuote };
+};
+
+/** A channel as its owner sees it on the sign-up pages. */
+export type SignupChannel = {
+  id: number;
+  slug: string;
+  domain: string;
+  url: string;
+  title: string;
+  status: string;
+  plan: PlanId | null;
+  plan_monthly_usd: number | null;
+  subscription_status: SubscriptionStatus;
+  subscription_paid_until: string | null;
+  onboarding_paid_at: string | null;
+  quote: OnboardingQuote | null;
+  requested_at: string | null;
+  verified: boolean;
+  channel: {
+    username: string | null;
+    title: string | null;
+    participants_count: number | null;
+    posts_estimate: number | null;
+    resolved: boolean;
+  };
+  progress: { imported: number; total: number | null; backfill_status: string | null };
+  created_at: string;
+};
+
+export type AdminSignup = {
+  user_id: number;
+  tg_user_id: number;
+  name: string;
+  username: string | null;
+  photo_url: string | null;
+  signed_up_at: string;
+  last_login_at: string | null;
+  tenants: AdminTenant[];
+};
 
 export type AdminTenant = {
   id: number;
@@ -37,6 +107,15 @@ export type AdminTenant = {
   daily_chat_budget_usd: number;
   daily_studio_budget_usd: number;
   created_at: string;
+  /** admin (connected by hand) | self (registered on the platform domain). */
+  source: "admin" | "self";
+  owner_user_id: number | null;
+  plan: PlanId | null;
+  subscription_status: SubscriptionStatus;
+  subscription_paid_until: string | null;
+  onboarding_quote: OnboardingQuote | null;
+  onboarding_paid_at: string | null;
+  requested_at: string | null;
   channel: null | {
     id: number;
     tg_channel_id: number;
@@ -367,6 +446,8 @@ export type StudioOverview = {
   studio_spent_usd: number;
   has_voice_profile: boolean;
   bot_username: string | null;
+  plan: PlanId | null;
+  writing_tools: boolean;
 };
 
 export type PendingTag = {

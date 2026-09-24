@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import secrets
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from kanalchi.ai import tagops
 from kanalchi.api.deps import enforce_same_origin, get_db, require_admin
 from kanalchi.api.routers.tags import tag_out
+from kanalchi.core import billing
 from kanalchi.core.jobs import create_job_run
 from kanalchi.core.members import invite_member, list_members, remove_member
 from kanalchi.core.models import (
@@ -26,6 +27,7 @@ from kanalchi.core.models import (
     TelegramAccount,
     Tenant,
     UsageLedger,
+    User,
 )
 from kanalchi.core.settings import get_settings
 from kanalchi.text.slug import slugify
@@ -65,6 +67,15 @@ def _tenant_out(t: Tenant, channel: Channel | None = None, imported: int = 0) ->
         "daily_chat_budget_usd": float(t.daily_chat_budget_usd or 0),
         "daily_studio_budget_usd": float(t.daily_studio_budget_usd or 0),
         "created_at": t.created_at,
+        # Self-serve sign-up and billing; admin-created channels are "admin" with no owner.
+        "source": t.source,
+        "owner_user_id": t.owner_user_id,
+        "plan": t.plan,
+        "subscription_status": t.subscription_status,
+        "subscription_paid_until": t.subscription_paid_until,
+        "onboarding_quote": t.onboarding_quote,
+        "onboarding_paid_at": t.onboarding_paid_at,
+        "requested_at": ((t.settings or {}).get("signup") or {}).get("requested_at"),
         "channel": {
             "id": channel.id,
             "tg_channel_id": channel.tg_channel_id,
@@ -174,6 +185,13 @@ class TenantPatch(BaseModel):
     locales: list[str] | None = None
     daily_chat_budget_usd: float | None = None
     daily_studio_budget_usd: float | None = None
+    plan: str | None = Field(default=None, pattern="^(archive|basic|premium)$")
+    subscription_status: str | None = Field(
+        default=None, pattern="^(none|pending|active|past_due|cancelled)$"
+    )
+    subscription_paid_until: date | None = None
+    # True stamps now, False clears it; None leaves it alone.
+    onboarding_paid: bool | None = None
 
 
 @router.patch("/tenants/{tenant_id}")
@@ -185,6 +203,9 @@ async def patch_tenant(tenant_id: int, body: TenantPatch, db: AsyncSession = Dep
 
     old_domain = t.domain
     for k, v in body.model_dump(exclude_none=True).items():
+        if k == "onboarding_paid":
+            t.onboarding_paid_at = datetime.now(UTC) if v else None
+            continue
         if k == "status" and v not in {"active", "paused", "archived"}:
             raise HTTPException(400, "status must be active, paused or archived")
         if k == "domain":
@@ -201,6 +222,49 @@ async def patch_tenant(tenant_id: int, body: TenantPatch, db: AsyncSession = Dep
         f"tenant:host:{old_domain}", f"tls:ask:{old_domain}", f"tenant:host:{t.domain}", f"tls:ask:{t.domain}"
     )
     return _tenant_out(t)
+
+
+# --------------------------------------------------------------------- sign-ups
+@router.get("/signups")
+async def signups(db: AsyncSession = Depends(get_db)) -> list[dict]:
+    """Everyone who signed in on the platform domain, newest first, with the channels they added."""
+    users = (
+        await db.scalars(
+            select(User).where(User.signed_up_at.is_not(None)).order_by(User.signed_up_at.desc())
+        )
+    ).all()
+    rows = (
+        await db.execute(
+            select(Tenant, Channel)
+            .outerjoin(Channel, Channel.tenant_id == Tenant.id)
+            .where(Tenant.owner_user_id.in_([u.id for u in users]) if users else False)
+            .order_by(Tenant.created_at.desc())
+        )
+    ).all()
+    imported = await _imported(db, [c.id for _, c in rows if c is not None])
+    by_owner: dict[int, list[dict]] = {}
+    for t, c in rows:
+        by_owner.setdefault(t.owner_user_id or 0, []).append(
+            _tenant_out(t, c, imported.get(c.id, 0) if c else 0)
+        )
+    return [
+        {
+            "user_id": u.id,
+            "tg_user_id": u.tg_user_id,
+            "name": " ".join(x for x in [u.first_name, u.last_name] if x) or u.username or str(u.tg_user_id),
+            "username": u.username,
+            "photo_url": u.photo_url,
+            "signed_up_at": u.signed_up_at,
+            "last_login_at": u.last_login_at,
+            "tenants": by_owner.get(u.id, []),
+        }
+        for u in users
+    ]
+
+
+@router.get("/plans")
+async def admin_plans() -> dict:
+    return {"plans": billing.plan_catalogue(), "statuses": list(billing.SUBSCRIPTION_STATUSES)}
 
 
 # --------------------------------------------------------------------- members

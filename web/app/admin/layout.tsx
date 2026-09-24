@@ -8,11 +8,22 @@ import { getMe } from "@/lib/auth";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Admin" };
 
-export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const [me, t, common] = await Promise.all([getMe(true), getTranslations("admin"), getTranslations("common")]);
+export default async function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const [me, t, common] = await Promise.all([
+    getMe(true),
+    getTranslations("admin"),
+    getTranslations("common"),
+  ]);
 
   if (!me.authenticated || me.role !== "admin") {
-    const widget = await apiFetchOrNull<{ bot_username: string | null }>("/api/auth/widget", { admin: true });
+    const widget = await apiFetchOrNull<{ bot_username: string | null }>(
+      "/api/auth/widget",
+      { admin: true },
+    );
     return (
       <main className="mx-auto flex min-h-screen max-w-sm flex-col items-center justify-center gap-5 px-6 text-center">
         <div className="grid h-11 w-11 place-items-center rounded-xl bg-primary text-lg font-semibold text-primary-foreground">
@@ -38,6 +49,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         items={[
           { href: "/", label: t("overview") },
           { href: "/tenants", label: t("tenants") },
+          { href: "/signups", label: t("signups") },
           { href: "/accounts", label: t("accounts") },
           { href: "/jobs", label: t("jobs") },
           { href: "/costs", label: t("costs") },

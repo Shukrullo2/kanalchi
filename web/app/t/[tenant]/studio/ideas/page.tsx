@@ -1,8 +1,9 @@
 import { IdeaBoard } from "@/components/studio/IdeaBoard";
-import { apiFetch } from "@/lib/api";
+import { apiFetchOrNull } from "@/lib/api";
 import type { IdeaOut } from "@/lib/types";
 
 export default async function IdeasPage() {
-  const ideas = await apiFetch<IdeaOut[]>("/api/studio/ideas");
+  // Null on a plan without the writing tools; the studio layout shows the gate instead.
+  const ideas = (await apiFetchOrNull<IdeaOut[]>("/api/studio/ideas")) ?? [];
   return <IdeaBoard initial={ideas} />;
 }

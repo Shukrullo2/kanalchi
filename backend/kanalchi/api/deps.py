@@ -42,6 +42,8 @@ class TenantContext:
     host: str
     is_admin_host: bool
     tenant: Tenant | None
+    # The platform's own domain: the landing page and the self-serve sign-up live there.
+    is_platform_host: bool = False
 
     @property
     def tenant_id(self) -> int | None:
@@ -65,6 +67,9 @@ async def get_tenant_ctx(request: Request, db: AsyncSession = Depends(get_db)) -
         return TenantContext(host=host, is_admin_host=True, tenant=None)
     tid = await _tenant_id_for_host(host, db)
     if tid is None:
+        # A registered channel domain always wins over the platform domain (proxy.ts agrees).
+        if host in s.platform_hosts:
+            return TenantContext(host=host, is_admin_host=False, tenant=None, is_platform_host=True)
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="unknown host")
     tenant = await db.get(Tenant, tid)
     if tenant is None or tenant.status == "archived":
@@ -101,6 +106,15 @@ async def require_member(
         or user.role not in {"owner", "editor"}
     ):
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="studio members only")
+    return user
+
+
+async def require_user(
+    user: SessionData | None = Depends(current_user), ctx: TenantContext = Depends(get_tenant_ctx)
+) -> SessionData:
+    """Self-serve sign-up: anyone signed in through Telegram on the platform domain."""
+    if user is None or user.role != "user" or not ctx.is_platform_host:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="sign in first")
     return user
 
 

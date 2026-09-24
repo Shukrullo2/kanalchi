@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from kanalchi.api.deps import get_db, require_tenant
 from kanalchi.api.serializers import attach_media_links, attach_tags, post_out
+from kanalchi.core.billing import has_writing_tools
 from kanalchi.core.models import Channel, Post, Tenant
 
 router = APIRouter(prefix="/api", tags=["viewer"])
@@ -41,6 +42,8 @@ async def tenant_info(tenant: Tenant = Depends(require_tenant), db: AsyncSession
         "primary_lang": tenant.primary_lang,
         "locales": tenant.locales,
         "bot_username": tenant.bot_username,
+        "plan": tenant.plan,
+        "writing_tools": has_writing_tools(tenant),
         "post_count": post_count or 0,
         "first_post_at": first_at,
         "last_post_at": last_at,

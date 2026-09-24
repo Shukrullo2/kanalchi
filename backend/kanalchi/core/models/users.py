@@ -18,6 +18,8 @@ class User(TimestampMixin, Base):
     last_name: Mapped[str | None] = mapped_column(String(128))
     photo_url: Mapped[str | None] = mapped_column(Text)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # First sign-in on the platform domain, i.e. when they registered as a prospective blogger.
+    signed_up_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class TenantMember(TimestampMixin, Base):

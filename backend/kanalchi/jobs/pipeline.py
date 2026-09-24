@@ -247,6 +247,44 @@ async def pipeline_status(tenant_id: int) -> dict[str, Any]:
     }
 
 
+def estimate_lines(
+    total: int,
+    *,
+    avg_tokens: float = DEFAULT_POST_TOKENS,
+    text_share: float = DEFAULT_TEXT_SHARE,
+    extracted: int = 0,
+    embedded: int = 0,
+    profile: bool = False,
+    has_taxonomy: bool = False,
+) -> dict[str, float]:
+    """The cost of each remaining step for an archive of `total` posts, in dollars.
+
+    Pure, so the sign-up quote can price a channel that has nothing imported yet.
+    """
+    s = get_settings()
+    expected_text_posts = int(total * text_share)
+    to_extract = max(0, expected_text_posts - extracted)
+    per_post = cost_usd(
+        s.extract_model,
+        Usage(
+            input_tokens=int(avg_tokens) + PER_POST_OVERHEAD_TOKENS,
+            cache_read_tokens=SYSTEM_PROMPT_TOKENS,
+            output_tokens=DEFAULT_OUTPUT_TOKENS,
+        ),
+        batch=True,
+    )
+    to_embed = max(0, total - embedded)
+    # Two chunks a post: the original text and the synthetic Latin summary.
+    embedding = embed_cost_usd(s.embed_model, int(to_embed * avg_tokens * 2))
+    return {
+        "extraction": round(per_post * to_extract, 2),
+        "embedding": round(embedding, 2),
+        "profile": 0.0 if profile else round(DISCOVERY_USD, 2),
+        "taxonomy": 0.0 if has_taxonomy else round(TAXONOMY_USD_PER_POST * total, 2),
+        "summaries": round(SUMMARIES_USD_PER_POST * total, 2),
+    }
+
+
 async def estimate(tenant_id: int) -> dict[str, Any]:
     """What finishing this channel will cost, from what is known before and after the import.
 
@@ -278,28 +316,16 @@ async def estimate(tenant_id: int) -> dict[str, Any]:
     total = max(posts, (channel.backfill_total_estimate if channel else 0) or 0)
     text_share = (text_posts / posts) if posts else DEFAULT_TEXT_SHARE
     avg_tokens = (float(avg_chars) / CHARS_PER_TOKEN) if avg_chars else DEFAULT_POST_TOKENS
-    expected_text_posts = int(total * text_share)
-
-    to_extract = max(0, expected_text_posts - (extracted or 0))
-    per_post = cost_usd(
-        s.extract_model,
-        Usage(
-            input_tokens=int(avg_tokens) + PER_POST_OVERHEAD_TOKENS,
-            cache_read_tokens=SYSTEM_PROMPT_TOKENS,
-            output_tokens=DEFAULT_OUTPUT_TOKENS,
-        ),
-        batch=True,
+    to_extract = max(0, int(total * text_share) - (extracted or 0))
+    lines = estimate_lines(
+        total,
+        avg_tokens=avg_tokens,
+        text_share=text_share,
+        extracted=extracted or 0,
+        embedded=embedded or 0,
+        profile=profile,
+        has_taxonomy=has_taxonomy,
     )
-    to_embed = max(0, total - (embedded or 0))
-    # Two chunks a post: the original text and the synthetic Latin summary.
-    embedding = embed_cost_usd(s.embed_model, int(to_embed * avg_tokens * 2))
-    lines = {
-        "extraction": round(per_post * to_extract, 2),
-        "embedding": round(embedding, 2),
-        "profile": 0.0 if profile else round(DISCOVERY_USD, 2),
-        "taxonomy": 0.0 if has_taxonomy else round(TAXONOMY_USD_PER_POST * total, 2),
-        "summaries": round(SUMMARIES_USD_PER_POST * total, 2),
-    }
     out: dict[str, Any] = {
         "posts_total": total,
         "posts_imported": posts,

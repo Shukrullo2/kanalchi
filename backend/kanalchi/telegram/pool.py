@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from telethon import TelegramClient, events, utils
 from telethon.errors import (
     AuthKeyUnregisteredError,
@@ -28,7 +28,7 @@ from telethon.tl.types import PeerChannel
 from kanalchi.core.crypto import decrypt, encrypt
 from kanalchi.core.db import session_scope
 from kanalchi.core.logging import get_logger
-from kanalchi.core.models import Channel, TelegramAccount
+from kanalchi.core.models import Channel, TelegramAccount, Tenant
 from kanalchi.core.redis import get_redis
 from kanalchi.core.settings import get_settings
 
@@ -123,7 +123,15 @@ class TelethonPool:
                 )
             ).all()
             channels = (
-                await db.scalars(select(Channel).where(Channel.telegram_account_id.is_not(None)))
+                await db.scalars(
+                    select(Channel)
+                    .join(Tenant, Tenant.id == Channel.tenant_id)
+                    .where(
+                        Channel.telegram_account_id.is_not(None),
+                        # The archive plan is a snapshot: no live updates after the import.
+                        or_(Tenant.plan.is_(None), Tenant.plan != "archive"),
+                    )
+                )
             ).all()
         wanted = {a.id: a for a in accounts}
         by_account: dict[int, dict[int, LiveChannel]] = {}
