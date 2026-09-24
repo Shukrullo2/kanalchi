@@ -36,21 +36,24 @@ export type Me =
 export type PlanId = "archive" | "basic" | "premium";
 export type SubscriptionStatus = "none" | "pending" | "active" | "past_due" | "cancelled";
 
-export type Plan = { id: PlanId; monthly_usd: number; live_updates: boolean; writing_tools: boolean };
+export type Plan = { id: PlanId; monthly_uzs: number; live_updates: boolean; writing_tools: boolean };
 
 export type OnboardingQuote = {
   posts: number;
-  ai_usd: number;
-  price_usd: number;
+  /** The one-off import price in soums, whole thousands. */
+  price_uzs: number;
   /** telegram (measured) | manual (typed in by the blogger) | sample */
   source: string;
   computed_at: string;
+  /** Admin only: the estimated AI cost the price was made from. */
+  ai_usd?: number;
+  avg_post_tokens?: number | null;
 };
 
 export type PlanCatalogue = {
   currency: string;
   plans: Plan[];
-  onboarding: { base_usd: number; ai_markup: number; min_usd: number; sample: OnboardingQuote };
+  onboarding: { sample: OnboardingQuote };
 };
 
 /** A channel as its owner sees it on the sign-up pages. */
@@ -62,11 +65,13 @@ export type SignupChannel = {
   title: string;
   status: string;
   plan: PlanId | null;
-  plan_monthly_usd: number | null;
+  plan_monthly_uzs: number | null;
   subscription_status: SubscriptionStatus;
   subscription_paid_until: string | null;
   onboarding_paid_at: string | null;
   quote: OnboardingQuote | null;
+  /** pending: Telegram is being asked for the size; failed: the blogger is asked instead. */
+  preview_status: "pending" | "done" | "failed";
   requested_at: string | null;
   verified: boolean;
   /** The blogger chose not to prove ownership through the bot; the admin checks by hand. */

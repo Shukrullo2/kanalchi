@@ -480,7 +480,7 @@
     "pricingEyebrow": "Narxlar",
     "pricingLead": "Bir marta import,",
     "pricingAccent": "keyin oylik obuna",
-    "pricingBody": "Import narxi kanal hajmiga qarab hisoblanadi: masalan, {posts} ta post uchun taxminan ${price}. Keyin tanlangan tarif bo‘yicha oylik to‘lov. Aniq narxni kanal havolasini kiritib bir daqiqada ko‘rasiz.",
+    "pricingBody": "Import narxi kanal hajmiga qarab hisoblanadi: masalan, {posts} ta post uchun taxminan {price} so‘m. Keyin tanlangan tarif bo‘yicha oylik to‘lov. Aniq narxni kanal havolasini kiritib bir daqiqada ko‘rasiz.",
     "pricingCta": "Kanalim narxini hisoblash",
     "finalContact": "Savol bo‘lsa, Telegramda yozing"
   },
@@ -588,6 +588,9 @@
     },
     "error": "Xatolik: {message}",
     "skipButton": "O‘tkazib yuborish",
-    "skipped": "O‘tkazib yuborildi — egalikni admin qo‘lda tekshiradi."
+    "skipped": "O‘tkazib yuborildi — egalikni admin qo‘lda tekshiradi.",
+    "currency": "so‘m",
+    "calculating": "Hisoblanmoqda: Telegramdan kanal hajmi va postlar uzunligi so‘ralmoqda…",
+    "estimateFailed": "Hajmni avtomatik aniqlab bo‘lmadi. Postlar sonini o‘zingiz yozing:"
   }
 }

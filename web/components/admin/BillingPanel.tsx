@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { patch } from "@/lib/client";
+import { uzs } from "@/lib/format";
 import type { AdminTenant, PlanId, SubscriptionStatus } from "@/lib/types";
 
 const PLANS: PlanId[] = ["archive", "basic", "premium"];
@@ -63,10 +64,15 @@ export function BillingPanel({ tenant }: { tenant: AdminTenant }) {
           <div className="stat-label">Onboarding</div>
           {quote ? (
             <p className="mt-1">
-              <span className="tnum font-medium">${quote.price_usd}</span>{" "}
+              <span className="tnum font-medium">
+                {uzs(quote.price_uzs)} UZS
+              </span>{" "}
               <span className="text-muted-foreground">
-                for {quote.posts.toLocaleString("en-US")} posts ({quote.source};
-                AI ≈ ${quote.ai_usd})
+                for {quote.posts.toLocaleString("en-US")} posts ({quote.source}
+                {quote.avg_post_tokens
+                  ? `, ${quote.avg_post_tokens} tok/post`
+                  : ""}
+                ; AI ≈ ${quote.ai_usd})
               </span>
             </p>
           ) : (

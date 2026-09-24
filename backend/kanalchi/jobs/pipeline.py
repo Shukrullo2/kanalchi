@@ -274,8 +274,9 @@ def estimate_lines(
         batch=True,
     )
     to_embed = max(0, total - embedded)
-    # Two chunks a post: the original text and the synthetic Latin summary.
-    embedding = embed_cost_usd(s.embed_model, int(to_embed * avg_tokens * 2))
+    # The original text and the synthetic Latin summary, in chunks: measured at about four
+    # times the post's own tokens on the first real channel (2026-09-25).
+    embedding = embed_cost_usd(s.embed_model, int(to_embed * avg_tokens * 4))
     return {
         "extraction": round(per_post * to_extract, 2),
         "embedding": round(embedding, 2),

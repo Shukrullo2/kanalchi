@@ -480,7 +480,7 @@
     "pricingEyebrow": "Pricing",
     "pricingLead": "One import,",
     "pricingAccent": "then a monthly plan",
-    "pricingBody": "The import is priced by the size of the channel: {posts} posts come to about ${price}, for example. After that, a monthly fee for the plan you choose. Paste your channel link and see the exact price in a minute.",
+    "pricingBody": "The import is priced by the size of the channel: {posts} posts come to about {price} UZS, for example. After that, a monthly fee for the plan you choose. Paste your channel link and see the exact price in a minute.",
     "pricingCta": "Price my channel",
     "finalContact": "Questions? Message me on Telegram"
   },
@@ -588,6 +588,9 @@
     },
     "error": "Error: {message}",
     "skipButton": "Skip",
-    "skipped": "Skipped; the admin checks ownership by hand."
+    "skipped": "Skipped; the admin checks ownership by hand.",
+    "currency": "UZS",
+    "calculating": "Calculating: asking Telegram for the channel's size and post length…",
+    "estimateFailed": "The size could not be measured automatically. Type the number of posts:"
   }
 }

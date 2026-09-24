@@ -18,20 +18,23 @@ PLANS = ("archive", "basic", "premium")
 SUBSCRIPTION_STATUSES = ("none", "pending", "active", "past_due", "cancelled")
 
 
+CURRENCY = "UZS"
+
+
 def plan_catalogue() -> list[dict[str, Any]]:
-    """The three plans with their monthly price and what they switch on."""
+    """The three plans with their monthly price in soums and what they switch on."""
     s = get_settings()
     return [
-        {"id": "archive", "monthly_usd": s.plan_archive_usd, "live_updates": False, "writing_tools": False},
-        {"id": "basic", "monthly_usd": s.plan_basic_usd, "live_updates": True, "writing_tools": False},
-        {"id": "premium", "monthly_usd": s.plan_premium_usd, "live_updates": True, "writing_tools": True},
+        {"id": "archive", "monthly_uzs": s.plan_archive_uzs, "live_updates": False, "writing_tools": False},
+        {"id": "basic", "monthly_uzs": s.plan_basic_uzs, "live_updates": True, "writing_tools": False},
+        {"id": "premium", "monthly_uzs": s.plan_premium_uzs, "live_updates": True, "writing_tools": True},
     ]
 
 
-def plan_price_usd(plan: str | None) -> float | None:
+def plan_price_uzs(plan: str | None) -> int | None:
     for p in plan_catalogue():
         if p["id"] == plan:
-            return float(p["monthly_usd"])
+            return int(p["monthly_uzs"])
     return None
 
 
@@ -46,24 +49,43 @@ def has_writing_tools(tenant: Tenant) -> bool:
     return tenant.plan is None or tenant.plan == "premium"
 
 
-def quote_for_posts(posts: int, *, source: str, avg_post_tokens: int | None = None) -> dict[str, Any]:
+def quote_for_posts(
+    posts: int,
+    *,
+    source: str,
+    avg_post_tokens: float | None = None,
+    text_share: float | None = None,
+) -> dict[str, Any]:
     """Price the import of an archive of `posts` messages.
 
     `source` records where the count came from: "telegram" (measured) or "manual" (typed in by
-    the blogger), so a measured figure is never overwritten by a guess.
+    the blogger), so a measured figure is never overwritten by a guess. The measured average
+    post length and share of posts with text, when the preview job sampled them, bring the
+    estimate within a few percent of what the first real channel cost.
     """
-    from kanalchi.jobs.pipeline import DEFAULT_POST_TOKENS, estimate_lines
+    from kanalchi.jobs.pipeline import DEFAULT_POST_TOKENS, DEFAULT_TEXT_SHARE, estimate_lines
 
     s = get_settings()
     posts = max(0, int(posts))
-    lines = estimate_lines(posts, avg_tokens=avg_post_tokens or DEFAULT_POST_TOKENS)
+    lines = estimate_lines(
+        posts,
+        avg_tokens=avg_post_tokens or DEFAULT_POST_TOKENS,
+        text_share=text_share if text_share is not None else DEFAULT_TEXT_SHARE,
+    )
     ai_usd = round(sum(lines.values()), 2)
-    price = s.onboarding_base_usd + ai_usd * s.onboarding_ai_markup
-    price = max(s.onboarding_min_usd, round(price))
+    price_uzs = int(round(ai_usd * s.onboarding_markup * s.usd_uzs_rate / 1000.0)) * 1000
     return {
         "posts": posts,
         "ai_usd": ai_usd,
-        "price_usd": float(price),
+        "price_uzs": price_uzs,
         "source": source,
+        "avg_post_tokens": int(avg_post_tokens) if avg_post_tokens else None,
         "computed_at": datetime.now(UTC).isoformat(),
     }
+
+
+def public_quote(quote: dict[str, Any] | None) -> dict[str, Any] | None:
+    """The quote as the blogger sees it: the post count and the price, not how it was made."""
+    if quote is None:
+        return None
+    return {k: quote[k] for k in ("posts", "price_uzs", "source", "computed_at") if k in quote}

@@ -83,16 +83,16 @@ class Settings(BaseSettings):
     viewer_chat_per_visitor_day: int = 40
     viewer_chat_per_tenant_day: int = 300
 
-    # --- plans / billing (USD) ---
-    # Monthly subscription per plan; the admin collects payment by hand for now.
-    plan_archive_usd: float = 9.0
-    plan_basic_usd: float = 19.0
-    plan_premium_usd: float = 39.0
-    # The one-off onboarding price is the estimated AI cost of reading the archive, marked
-    # up, plus a base fee, never below the floor.
-    onboarding_base_usd: float = 5.0
-    onboarding_ai_markup: float = 2.0
-    onboarding_min_usd: float = 10.0
+    # --- plans / billing (UZS) ---
+    # Monthly subscription per plan in soums; the admin collects payment by hand for now.
+    plan_archive_uzs: int = 90_000
+    plan_basic_uzs: int = 120_000
+    plan_premium_uzs: int = 150_000
+    # The one-off onboarding price is the estimated AI cost of reading the archive (in dollars,
+    # from the pipeline's measured per-post figures) times this factor, converted at this rate
+    # and rounded to the nearest thousand soums. The factor is not shown to the blogger.
+    onboarding_markup: float = 1.2
+    usd_uzs_rate: float = 12_800.0
 
     # --- datastores ---
     database_url: str = "postgresql+psycopg://kanalchi:kanalchi@localhost:5433/kanalchi"

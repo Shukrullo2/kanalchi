@@ -22,6 +22,7 @@ import {
 } from "@/components/landing/LandingShell";
 import { PlanCards } from "@/components/signup/PlanCards";
 import { apiFetchOrNull } from "@/lib/api";
+import { uzs } from "@/lib/format";
 import { CONTACT_URL } from "@/lib/config";
 import type { PlanCatalogue } from "@/lib/types";
 
@@ -276,7 +277,7 @@ export default async function Landing() {
           <p className="landing-lead">
             {t("pricingBody", {
               posts: catalogue.onboarding.sample.posts.toLocaleString("en-US"),
-              price: catalogue.onboarding.sample.price_usd,
+              price: uzs(catalogue.onboarding.sample.price_uzs),
             })}
           </p>
           <div className="mt-8">

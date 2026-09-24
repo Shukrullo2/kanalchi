@@ -43,16 +43,10 @@ def parse_channel_username(link: str) -> str | None:
 @router.get("/plans")
 async def plans() -> dict:
     """Public: the plans and how the onboarding price is made, for the landing page."""
-    s = get_settings()
     return {
-        "currency": "USD",
+        "currency": billing.CURRENCY,
         "plans": billing.plan_catalogue(),
-        "onboarding": {
-            "base_usd": s.onboarding_base_usd,
-            "ai_markup": s.onboarding_ai_markup,
-            "min_usd": s.onboarding_min_usd,
-            "sample": billing.quote_for_posts(1000, source="sample"),
-        },
+        "onboarding": {"sample": billing.public_quote(billing.quote_for_posts(1000, source="sample"))},
     }
 
 
@@ -87,6 +81,12 @@ async def _out(db: AsyncSession, tenant: Tenant, user: SessionData) -> dict[str,
             await db.scalar(select(func.count()).select_from(Post).where(Post.channel_id == channel.id)) or 0
         )
     signup = (tenant.settings or {}).get("signup") or {}
+    quote = tenant.onboarding_quote
+    if quote and "price_uzs" not in quote:
+        # Quoted before prices moved to soums: price it again from the same count.
+        quote = tenant.onboarding_quote = billing.quote_for_posts(
+            quote["posts"], source=quote.get("source", "manual"), avg_post_tokens=quote.get("avg_post_tokens")
+        )
     return {
         "id": tenant.id,
         "slug": tenant.slug,
@@ -95,11 +95,13 @@ async def _out(db: AsyncSession, tenant: Tenant, user: SessionData) -> dict[str,
         "title": tenant.title or (channel.title if channel else "") or signup.get("username", ""),
         "status": tenant.status,
         "plan": tenant.plan,
-        "plan_monthly_usd": billing.plan_price_usd(tenant.plan),
+        "plan_monthly_uzs": billing.plan_price_uzs(tenant.plan),
         "subscription_status": tenant.subscription_status,
         "subscription_paid_until": tenant.subscription_paid_until,
         "onboarding_paid_at": tenant.onboarding_paid_at,
-        "quote": tenant.onboarding_quote,
+        "quote": billing.public_quote(quote),
+        # pending: Telegram is being asked for the size; failed: ask the blogger instead.
+        "preview_status": signup.get("preview", "pending" if tenant.onboarding_quote is None else "done"),
         "requested_at": signup.get("requested_at"),
         "verified": bool(member and member.verified_admin_at),
         "verify_skipped": bool(signup.get("verify_skipped")),
@@ -171,7 +173,10 @@ async def add_channel(
         owner_user_id=user.user_id,
         source="self",
         domain_verified_at=datetime.now(UTC),
-        settings={"auto_domain": True, "signup": {"username": username, "link": body.link.strip()}},
+        settings={
+            "auto_domain": True,
+            "signup": {"username": username, "link": body.link.strip(), "preview": "pending"},
+        },
     )
     db.add(tenant)
     await db.flush()
@@ -196,6 +201,7 @@ async def add_channel(
         await telegram_jobs.channel_preview.defer_async(tenant_id=tenant.id)
     except Exception as exc:  # noqa: BLE001
         log.warning("signup.preview.defer_failed", tenant_id=tenant.id, error=str(exc)[:200])
+        tenant.settings = {**tenant.settings, "signup": {**tenant.settings["signup"], "preview": "failed"}}
     await _notify(f"New channel registered: @{username} by {user.name} (tg {user.tg_user_id}) → {domain}")
     log.info("signup.channel_added", tenant_id=tenant.id, username=username, user_id=user.user_id)
     return await _out(db, tenant, user)
@@ -279,8 +285,8 @@ async def request_onboarding(
     quote = tenant.onboarding_quote
     await _notify(
         f"Onboarding requested: @{signup.get('username')} ({tenant.domain})\n"
-        f"plan {tenant.plan} (${billing.plan_price_usd(tenant.plan)}/mo), "
-        f"import ${quote.get('price_usd')} for {quote.get('posts')} posts\n"
+        f"plan {tenant.plan} ({billing.plan_price_uzs(tenant.plan)} UZS/mo), "
+        f"import {quote.get('price_uzs')} UZS for {quote.get('posts')} posts (AI ≈ ${quote.get('ai_usd')})\n"
         f"by {user.name} (tg {user.tg_user_id}" + (f", @{user.username}" if user.username else "") + ")"
     )
     return await _out(db, tenant, user)

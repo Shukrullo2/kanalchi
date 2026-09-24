@@ -126,6 +126,21 @@ async def resolve_channel(
     return out
 
 
+PREVIEW_SAMPLE = 300
+
+
+def _set_preview(tenant: Tenant, state: str) -> None:
+    signup = {**((tenant.settings or {}).get("signup") or {}), "preview": state}
+    tenant.settings = {**(tenant.settings or {}), "signup": signup}
+
+
+async def mark_preview_failed(tenant_id: int) -> None:
+    async with session_scope() as db:
+        tenant = await db.get(Tenant, tenant_id)
+        if tenant is not None:
+            _set_preview(tenant, "failed")
+
+
 async def preview_channel(tenant_id: int) -> dict:
     """Size up a channel that registered itself: subscribers and message count, read through any
     active account without joining, so the sign-up page can quote the import. Fills the channel
@@ -141,11 +156,12 @@ async def preview_channel(tenant_id: int) -> dict:
         account_id = await db.scalar(
             select(TelegramAccount.id).where(TelegramAccount.status == "active").order_by(TelegramAccount.id)
         )
-    if not username:
-        return {"skipped": "no username"}
-    if account_id is None:
-        log.info("signup.preview.no_account", tenant_id=tenant_id)
-        return {"skipped": "no active account"}
+    if not username or account_id is None:
+        log.info(
+            "signup.preview.skipped", tenant_id=tenant_id, has_username=bool(username), account=account_id
+        )
+        await mark_preview_failed(tenant_id)
+        return {"skipped": "no username" if not username else "no active account"}
 
     pool = get_pool()
     client = pool.client(account_id)
@@ -156,10 +172,20 @@ async def preview_channel(tenant_id: int) -> dict:
                 raise RuntimeError("the link does not point to a Telegram channel")
             full = await client(functions.channels.GetFullChannelRequest(entity))
             total = (await client.get_messages(entity, limit=0)).total
+            # A sample of recent posts gives the channel's own text length and how many posts
+            # carry text at all, which is what the price actually depends on.
+            sample = await client.get_messages(entity, limit=PREVIEW_SAMPLE)
     except FloodWaitError as e:
         raise RuntimeError(f"Telegram asked to wait {e.seconds}s (FloodWait); retry later") from e
     except (UsernameNotOccupiedError, ChannelPrivateError, ValueError) as e:
         raise RuntimeError(f"cannot resolve channel: {type(e).__name__}") from e
+
+    from kanalchi.jobs.pipeline import CHARS_PER_TOKEN
+
+    texts = [len(m.message or "") for m in sample if m is not None and not getattr(m, "action", None)]
+    with_text = [n for n in texts if n > 0]
+    avg_tokens = (sum(with_text) / len(with_text) / CHARS_PER_TOKEN) if with_text else None
+    text_share = (len(with_text) / len(texts)) if texts else None
 
     async with session_scope() as db:
         tenant = await db.get(Tenant, tenant_id)
@@ -180,7 +206,10 @@ async def preview_channel(tenant_id: int) -> dict:
         ch.noforwards = bool(getattr(entity, "noforwards", False))
         if not tenant.title:
             tenant.title = entity.title or ""
-        tenant.onboarding_quote = quote_for_posts(total, source="telegram")
+        tenant.onboarding_quote = quote_for_posts(
+            total, source="telegram", avg_post_tokens=avg_tokens, text_share=text_share
+        )
+        _set_preview(tenant, "done")
         out = {
             "tg_channel_id": entity.id,
             "title": ch.title,

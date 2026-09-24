@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ArrowLeftIcon, ExternalIcon, SendIcon } from "@/components/Icons";
 import { PlanCards } from "@/components/signup/PlanCards";
 import { call, patch, post } from "@/lib/client";
-import { compactNumber, fullDate } from "@/lib/format";
+import { compactNumber, fullDate, uzs } from "@/lib/format";
 import type { Plan, PlanId, SignupChannel } from "@/lib/types";
 
 type StepKey = "estimate" | "verify" | "plan" | "payment" | "import" | "live";
@@ -35,6 +35,14 @@ export function OnboardingFlow({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [verifyResult, setVerifyResult] = useState<boolean | null>(null);
+  // Flips four minutes after the channel was added, in case the preview job never answers.
+  const [previewStale, setPreviewStale] = useState(false);
+  useEffect(() => {
+    const left =
+      4 * 60 * 1000 - (Date.now() - new Date(initial.created_at).getTime());
+    const id = setTimeout(() => setPreviewStale(true), Math.max(0, left));
+    return () => clearTimeout(id);
+  }, [initial.created_at]);
 
   const refresh = useCallback(async () => {
     try {
@@ -89,9 +97,13 @@ export function OnboardingFlow({
   const furthest = order.reduce((acc, k, i) => (done[k] ? i : acc), -1);
   const open = new Set(order.filter((k, i) => done[k] || i <= furthest + 1));
   const monthly =
-    ch.plan_monthly_usd ??
-    plans.find((p) => p.id === ch.plan)?.monthly_usd ??
+    ch.plan_monthly_uzs ??
+    plans.find((p) => p.id === ch.plan)?.monthly_uzs ??
     null;
+  // Telegram is asked for the size as soon as the channel is added; the typed estimate is
+  // only offered once that has failed (or has not answered within a few minutes).
+  const calculating =
+    !ch.quote && ch.preview_status === "pending" && !previewStale;
   const importPct =
     ch.progress.total && ch.progress.imported
       ? Math.min(
@@ -172,15 +184,27 @@ export function OnboardingFlow({
                 </span>
               </div>
               <div>
-                <span className="stat-value">${ch.quote.price_usd}</span>
+                <span className="stat-value">
+                  {uzs(ch.quote.price_uzs)}{" "}
+                  <small className="text-base font-semibold text-muted-foreground">
+                    {t("currency")}
+                  </small>
+                </span>
                 <span className="stat-label">{t("onboardingPrice")}</span>
               </div>
             </div>
+          ) : calculating ? (
+            <p className="flow-calculating text-sm text-muted-foreground">
+              <span className="flow-spinner" aria-hidden />
+              {t("calculating")}
+            </p>
           ) : (
-            <p className="text-sm text-muted-foreground">{t("estimating")}</p>
+            <p className="text-sm text-muted-foreground">
+              {t("estimateFailed")}
+            </p>
           )}
           <p className="landing-note">{t("onboardingPriceHint")}</p>
-          {ch.quote?.source !== "telegram" && !requested ? (
+          {!calculating && ch.quote?.source !== "telegram" && !requested ? (
             <form
               className="signup-add-row mt-3"
               onSubmit={(e) => {
@@ -272,7 +296,7 @@ export function OnboardingFlow({
               {monthly !== null ? (
                 <span className="text-muted-foreground">
                   {" "}
-                  · ${monthly}
+                  · {uzs(monthly)} {t("currency")}
                   {t("perMonth")}
                 </span>
               ) : null}{" "}
@@ -301,13 +325,15 @@ export function OnboardingFlow({
                   <dt className="text-muted-foreground">
                     {t("summaryImport")}
                   </dt>
-                  <dd>${ch.quote.price_usd}</dd>
+                  <dd>{uzs(ch.quote.price_uzs)}</dd>
                   <dt className="text-muted-foreground">
                     {t("summaryMonth", { plan: t(`plans.${ch.plan}.name`) })}
                   </dt>
-                  <dd>${monthly}</dd>
+                  <dd>{monthly !== null ? uzs(monthly) : "—"}</dd>
                   <dt>{t("summaryTotal")}</dt>
-                  <dd>${(ch.quote.price_usd + (monthly ?? 0)).toFixed(0)}</dd>
+                  <dd>
+                    {uzs(ch.quote.price_uzs + (monthly ?? 0))} {t("currency")}
+                  </dd>
                 </dl>
               ) : null}
               <button

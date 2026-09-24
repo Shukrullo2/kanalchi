@@ -29,14 +29,23 @@ def test_parse_channel_username(link: str, expected: str | None) -> None:
     assert parse_channel_username(link) == expected
 
 
-def test_quote_scales_with_posts_and_never_drops_below_the_floor() -> None:
+def test_quote_is_the_marked_up_ai_cost_in_whole_thousands_of_soums() -> None:
     s = get_settings()
     small = billing.quote_for_posts(10, source="manual")
-    large = billing.quote_for_posts(20_000, source="telegram")
-    assert small["price_usd"] == s.onboarding_min_usd
-    assert large["price_usd"] > small["price_usd"]
-    assert large["price_usd"] >= s.onboarding_base_usd + large["ai_usd"] * s.onboarding_ai_markup - 1
+    large = billing.quote_for_posts(20_000, source="telegram", avg_post_tokens=320, text_share=0.95)
+    assert large["price_uzs"] > small["price_uzs"] > 0
+    assert large["price_uzs"] % 1000 == 0
+    expected = large["ai_usd"] * s.onboarding_markup * s.usd_uzs_rate
+    assert abs(large["price_uzs"] - expected) <= 500
     assert large["source"] == "telegram" and large["posts"] == 20_000
+    # The blogger sees the price, never the markup or the dollar cost behind it.
+    assert set(billing.public_quote(large)) == {"posts", "price_uzs", "source", "computed_at"}
+
+
+def test_measured_length_changes_the_quote() -> None:
+    short = billing.quote_for_posts(5_000, source="telegram", avg_post_tokens=120)
+    long = billing.quote_for_posts(5_000, source="telegram", avg_post_tokens=600)
+    assert long["ai_usd"] > short["ai_usd"]
 
 
 def test_plan_entitlements() -> None:
@@ -52,7 +61,7 @@ def test_plan_entitlements() -> None:
 def test_catalogue_lists_three_plans_in_ascending_price() -> None:
     plans = billing.plan_catalogue()
     assert [p["id"] for p in plans] == ["archive", "basic", "premium"]
-    prices = [p["monthly_usd"] for p in plans]
-    assert prices == sorted(prices)
-    assert billing.plan_price_usd("basic") == prices[1]
-    assert billing.plan_price_usd(None) is None
+    prices = [p["monthly_uzs"] for p in plans]
+    assert prices == sorted(prices) == [90_000, 120_000, 150_000]
+    assert billing.plan_price_uzs("basic") == prices[1]
+    assert billing.plan_price_uzs(None) is None

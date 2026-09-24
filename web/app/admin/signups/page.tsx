@@ -2,7 +2,7 @@ import Link from "@/components/AppLink";
 import { getTranslations } from "next-intl/server";
 import { State } from "@/components/admin/StatusDot";
 import { apiFetch } from "@/lib/api";
-import { compactNumber } from "@/lib/format";
+import { compactNumber, uzs } from "@/lib/format";
 import type { AdminSignup } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -99,7 +99,7 @@ export default async function SignupsPage() {
                         </span>
                         {x.onboarding_quote ? (
                           <span className="tnum text-xs text-muted-foreground">
-                            import ${x.onboarding_quote.price_usd}
+                            import {uzs(x.onboarding_quote.price_uzs)} UZS
                           </span>
                         ) : null}
                         {x.onboarding_paid_at ? (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { uzs } from "@/lib/format";
 import type { Plan, PlanId } from "@/lib/types";
 
 /**
@@ -42,8 +43,11 @@ export function PlanCards({
               <span className="plan-name">{t(`plans.${p.id}.name`)}</span>
               <span className="plan-tagline">{t(`plans.${p.id}.tagline`)}</span>
               <span className="plan-price">
-                ${p.monthly_usd}
-                <small>{t("perMonth")}</small>
+                {uzs(p.monthly_uzs)}
+                <small>
+                  {t("currency")}
+                  {t("perMonth")}
+                </small>
               </span>
               <ul className="plan-features">
                 {(["f1", "f2", "f3", "f4"] as const).map((k) => {

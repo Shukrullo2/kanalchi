@@ -14,7 +14,8 @@ export function compactNumber(n: number): string {
   for (const [size, suffix] of units) {
     if (abs >= size) {
       const value = n / size;
-      const rounded = Math.abs(value) < 10 ? Math.round(value * 10) / 10 : Math.round(value);
+      const rounded =
+        Math.abs(value) < 10 ? Math.round(value * 10) / 10 : Math.round(value);
       return `${rounded}${suffix}`;
     }
   }
@@ -29,15 +30,93 @@ export function compactNumber(n: number): string {
  * each, is a small price for output that is identical everywhere.
  */
 const MONTHS: Record<string, string[]> = {
-  uz: ["yan", "fev", "mar", "apr", "may", "iyn", "iyl", "avg", "sen", "okt", "noy", "dek"],
-  ru: ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"],
-  en: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+  uz: [
+    "yan",
+    "fev",
+    "mar",
+    "apr",
+    "may",
+    "iyn",
+    "iyl",
+    "avg",
+    "sen",
+    "okt",
+    "noy",
+    "dek",
+  ],
+  ru: [
+    "янв",
+    "фев",
+    "мар",
+    "апр",
+    "мая",
+    "июн",
+    "июл",
+    "авг",
+    "сен",
+    "окт",
+    "ноя",
+    "дек",
+  ],
+  en: [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ],
 };
 
 const MONTHS_LONG: Record<string, string[]> = {
-  uz: ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avgust", "sentabr", "oktabr", "noyabr", "dekabr"],
-  ru: ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"],
-  en: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+  uz: [
+    "yanvar",
+    "fevral",
+    "mart",
+    "aprel",
+    "may",
+    "iyun",
+    "iyul",
+    "avgust",
+    "sentabr",
+    "oktabr",
+    "noyabr",
+    "dekabr",
+  ],
+  ru: [
+    "января",
+    "февраля",
+    "марта",
+    "апреля",
+    "мая",
+    "июня",
+    "июля",
+    "августа",
+    "сентября",
+    "октября",
+    "ноября",
+    "декабря",
+  ],
+  en: [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ],
 };
 
 function months(locale: string, long = false): string[] {
@@ -83,14 +162,27 @@ export function monthKey(iso: string): string {
  * own takes the nominative.
  */
 const RU_MONTHS_NOM = [
-  "январь", "февраль", "март", "апрель", "май", "июнь",
-  "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь",
+  "январь",
+  "февраль",
+  "март",
+  "апрель",
+  "май",
+  "июнь",
+  "июль",
+  "август",
+  "сентябрь",
+  "октябрь",
+  "ноябрь",
+  "декабрь",
 ];
 
 export function monthTitle(iso: string, locale = "en"): string {
   const d = new Date(iso);
   const base = locale.split("-")[0];
-  const name = base === "ru" ? RU_MONTHS_NOM[d.getMonth()] : months(locale, true)[d.getMonth()];
+  const name =
+    base === "ru"
+      ? RU_MONTHS_NOM[d.getMonth()]
+      : months(locale, true)[d.getMonth()];
   return `${name} ${d.getFullYear()}`;
 }
 
@@ -107,9 +199,13 @@ export function dateSpan(first: string, last: string, locale = "en"): string {
  * A channel with no photo gets a flat tone from the palette rather than a generated
  * gradient: two initials on one of four inks, picked deterministically from the name.
  */
-export function initialsTone(seed: string): { initials: string; style: React.CSSProperties } {
+export function initialsTone(seed: string): {
+  initials: string;
+  style: React.CSSProperties;
+} {
   let hash = 0;
-  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) % 4;
+  for (let i = 0; i < seed.length; i++)
+    hash = (hash * 31 + seed.charCodeAt(i)) % 4;
   const tones = [
     "oklch(0.505 0.178 268)",
     "oklch(0.545 0.163 27)",
@@ -123,4 +219,9 @@ export function initialsTone(seed: string): { initials: string; style: React.CSS
     .join("")
     .toUpperCase();
   return { initials: initials || "K", style: { background: tones[hash] } };
+}
+
+/** Soums with thousands separated by spaces: 1 353 000. Deterministic on server and client. */
+export function uzs(n: number): string {
+  return Math.round(n).toLocaleString("en-US").replace(/,/g, "\u202f");
 }
