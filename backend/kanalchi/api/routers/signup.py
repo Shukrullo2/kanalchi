@@ -64,6 +64,8 @@ class ChannelPatch(BaseModel):
     plan: str | None = Field(default=None, pattern="^(archive|basic|premium)$")
     # The blogger's own guess at the archive size, used until Telegram has been asked.
     posts_estimate: int | None = Field(default=None, ge=1, le=2_000_000)
+    # Skip proving ownership through the bot; the admin then checks by hand.
+    skip_verify: bool | None = None
 
 
 async def _mine(db: AsyncSession, user: SessionData, tenant_id: int) -> Tenant:
@@ -100,6 +102,7 @@ async def _out(db: AsyncSession, tenant: Tenant, user: SessionData) -> dict[str,
         "quote": tenant.onboarding_quote,
         "requested_at": signup.get("requested_at"),
         "verified": bool(member and member.verified_admin_at),
+        "verify_skipped": bool(signup.get("verify_skipped")),
         "channel": {
             "username": (channel.username if channel else None) or signup.get("username"),
             "title": channel.title if channel else None,
@@ -220,6 +223,9 @@ async def patch_channel(
             if channel is not None:
                 channel.backfill_total_estimate = body.posts_estimate
             tenant.onboarding_quote = billing.quote_for_posts(body.posts_estimate, source="manual")
+    if body.skip_verify is not None:
+        signup = {**((tenant.settings or {}).get("signup") or {}), "verify_skipped": body.skip_verify}
+        tenant.settings = {**(tenant.settings or {}), "signup": signup}
     if body.plan is not None:
         if tenant.subscription_status == "active":
             raise HTTPException(409, "the plan of a live channel is changed by the admin")

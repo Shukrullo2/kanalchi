@@ -586,6 +586,8 @@
       "past_due": "muddati o‘tgan",
       "cancelled": "bekor qilingan"
     },
-    "error": "Xatolik: {message}"
+    "error": "Xatolik: {message}",
+    "skipButton": "O‘tkazib yuborish",
+    "skipped": "O‘tkazib yuborildi — egalikni admin qo‘lda tekshiradi."
   }
 }

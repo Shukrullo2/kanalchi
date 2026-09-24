@@ -70,7 +70,7 @@ export function OnboardingFlow({
     ch.status === "active";
   const done: Record<StepKey, boolean> = {
     estimate: ch.quote !== null,
-    verify: ch.verified,
+    verify: ch.verified || ch.verify_skipped,
     plan: ch.plan !== null && requested,
     payment: paid,
     import: imported,
@@ -99,6 +99,22 @@ export function OnboardingFlow({
           Math.round((ch.progress.imported / ch.progress.total) * 100),
         )
       : 0;
+
+  const skipButton = (
+    <button
+      className="btn-ghost"
+      disabled={busy === "skip"}
+      onClick={() =>
+        void run("skip", () =>
+          patch<SignupChannel>(`/api/signup/channels/${ch.id}`, {
+            skip_verify: true,
+          }),
+        )
+      }
+    >
+      {t("skipButton")}
+    </button>
+  );
 
   return (
     <section className="shell landing-section pt-10 sm:pt-14">
@@ -204,6 +220,8 @@ export function OnboardingFlow({
         >
           {ch.verified ? (
             <p className="text-sm">{t("verified")}</p>
+          ) : ch.verify_skipped ? (
+            <p className="text-sm text-muted-foreground">{t("skipped")}</p>
           ) : botUsername && ch.channel.resolved ? (
             <>
               <p className="text-sm text-muted-foreground">
@@ -225,6 +243,7 @@ export function OnboardingFlow({
                 >
                   {t("verifyButton")}
                 </button>
+                {skipButton}
                 <span className="text-xs text-muted-foreground">
                   {t("verifyLater")}
                 </span>
@@ -236,9 +255,12 @@ export function OnboardingFlow({
               ) : null}
             </>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              {t("verifyUnavailable")}
-            </p>
+            <>
+              <p className="text-sm text-muted-foreground">
+                {t("verifyUnavailable")}
+              </p>
+              <div className="mt-3">{skipButton}</div>
+            </>
           )}
         </Step>
 

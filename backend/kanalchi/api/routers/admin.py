@@ -76,6 +76,7 @@ def _tenant_out(t: Tenant, channel: Channel | None = None, imported: int = 0) ->
         "onboarding_quote": t.onboarding_quote,
         "onboarding_paid_at": t.onboarding_paid_at,
         "requested_at": ((t.settings or {}).get("signup") or {}).get("requested_at"),
+        "verify_skipped": bool(((t.settings or {}).get("signup") or {}).get("verify_skipped")),
         "channel": {
             "id": channel.id,
             "tg_channel_id": channel.tg_channel_id,

@@ -586,6 +586,8 @@
       "past_due": "past due",
       "cancelled": "cancelled"
     },
-    "error": "Error: {message}"
+    "error": "Error: {message}",
+    "skipButton": "Skip",
+    "skipped": "Skipped; the admin checks ownership by hand."
   }
 }

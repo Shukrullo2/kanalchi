@@ -69,6 +69,8 @@ export type SignupChannel = {
   quote: OnboardingQuote | null;
   requested_at: string | null;
   verified: boolean;
+  /** The blogger chose not to prove ownership through the bot; the admin checks by hand. */
+  verify_skipped: boolean;
   channel: {
     username: string | null;
     title: string | null;
@@ -116,6 +118,7 @@ export type AdminTenant = {
   onboarding_quote: OnboardingQuote | null;
   onboarding_paid_at: string | null;
   requested_at: string | null;
+  verify_skipped: boolean;
   channel: null | {
     id: number;
     tg_channel_id: number;
