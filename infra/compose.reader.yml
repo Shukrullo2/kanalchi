@@ -37,6 +37,8 @@ services:
     ports: ["80:80", "443:443", "443:443/udp"]
     environment:
       ADMIN_HOST: ${ADMIN_HOST}
+      # Extra proxies whose X-Forwarded-For is trusted, e.g. a droplet forwarding during a move.
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

@@ -62,6 +62,12 @@ main() {
     "${dc[@]}" up -d --remove-orphans
   fi
 
+  # A bind-mounted Caddyfile change does not recreate the container; reload it explicitly.
+  if [[ -n "$("${dc[@]}" ps -q caddy 2>/dev/null)" ]]; then
+    "${dc[@]}" exec -T caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1 \
+      && echo "deploy: caddy config reloaded" || echo "deploy: caddy reload failed" >&2
+  fi
+
   # Wait for the API to answer before calling the deploy good.
   local i
   for i in $(seq 1 60); do
