@@ -81,9 +81,11 @@ async def fetch_media(media_id: int) -> dict:
             key = _key(tenant.id, channel.id, post.tg_message_id, media.tg_file_unique_id, ext)
             thumb_key = f"{key.rsplit('.', 1)[0]}_thumb.webp"
             size = msg.file.size or 0
+            # Too big, or a kind this deployment links to instead of storing (MEDIA_SKIP_KINDS).
+            link_only = size > s.media_max_bytes or media.kind in s.media_skip_kinds
 
             thumb_bytes: bytes | None = None
-            if media.kind in {"video", "animation", "document"} or size > s.media_max_bytes:
+            if media.kind in {"video", "animation", "document"} or link_only:
                 try:
                     raw = await client.download_media(msg, file=bytes, thumb=-1)
                     if raw:
@@ -91,7 +93,7 @@ async def fetch_media(media_id: int) -> dict:
                 except Exception as exc:  # noqa: BLE001
                     log.info("media.no_embedded_thumb", media_id=media_id, error=str(exc))
 
-            if size > s.media_max_bytes:
+            if link_only:
                 if thumb_bytes:
                     await storage.upload_bytes(s.s3_bucket_media, thumb_key, thumb_bytes, "image/webp")
                 await _finish(

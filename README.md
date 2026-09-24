@@ -144,6 +144,13 @@ and, on demand, for every channel domain the admin panel has registered and veri
 its `www.` alias and `<slug>.PLATFORM_DOMAIN`). That is what lets one deployment serve many
 channels on their own domains without touching the server per channel.
 
+Add `workers` to the same variable (`COMPOSE_PROFILES=edge,workers`) to run the three job
+workers as well: Telegram ingestion, indexing and publishing. On 2 GB they rely on swap,
+which is fine for new posts arriving a few an hour but slow for importing a big channel.
+Only one process may ever use a Telegram account's session, so stop any local
+`make worker-telegram` that uses the same account first. `MEDIA_SKIP_KINDS=video` keeps
+videos in Telegram (thumbnail plus link) instead of copying them to storage.
+
 ### What each service costs in memory
 
 Limits in `infra/compose.yml`: Postgres 2 GB, worker-telegram 1.2 GB, API and worker-index

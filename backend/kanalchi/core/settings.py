@@ -76,6 +76,9 @@ class Settings(BaseSettings):
     default_daily_studio_budget_usd: float = 20.0
     platform_daily_llm_cap_usd: float = 200.0
     media_max_bytes: int = 200 * 1024 * 1024
+    # Media kinds never copied to storage: they keep a thumbnail and link to the post in
+    # Telegram, as oversized files do. Comma list in the env, e.g. MEDIA_SKIP_KINDS=video.
+    media_skip_kinds: Annotated[list[str], NoDecode] = Field(default_factory=list)
     viewer_chat_per_ip_10min: int = 10
     viewer_chat_per_visitor_day: int = 40
     viewer_chat_per_tenant_day: int = 300
@@ -114,6 +117,15 @@ class Settings(BaseSettings):
                 "APP_ENV=prod but insecure configuration: set " + ", ".join(missing) + " (make gen-keys)"
             )
         return self
+
+    @field_validator("media_skip_kinds", mode="before")
+    @classmethod
+    def _split_kinds(cls, v: object) -> list[str]:
+        if v is None or v == "":
+            return []
+        if isinstance(v, str):
+            return [x.strip().lower() for x in v.replace(";", ",").split(",") if x.strip()]
+        return [str(x).lower() for x in v]  # type: ignore[union-attr]
 
     @property
     def is_dev(self) -> bool:

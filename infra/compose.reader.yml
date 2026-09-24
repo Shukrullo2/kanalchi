@@ -84,6 +84,40 @@ services:
       start_period: 20s
     deploy: { resources: { limits: { memory: 576M } } }
 
+  # Background workers (COMPOSE_PROFILES includes "workers"): Telegram ingestion (the only
+  # process that may hold the Telethon session), indexing, publishing. Limits are caps, not
+  # reservations; on a 2 GB droplet they lean on swap, which is fine for day-to-day work
+  # (a few new posts an hour) but slow for importing a large new channel.
+  worker-telegram:
+    <<: *backend
+    profiles: ["workers"]
+    command: kanalchi worker telegram --concurrency 2
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      minio: { condition: service_healthy }
+    volumes:
+      - media_tmp:/var/tmp/media
+    deploy: { resources: { limits: { memory: 448M } } }
+
+  worker-index:
+    <<: *backend
+    profiles: ["workers"]
+    command: kanalchi worker index --concurrency 2
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    deploy: { resources: { limits: { memory: 640M } } }
+
+  worker-publish:
+    <<: *backend
+    profiles: ["workers"]
+    command: kanalchi worker publish --concurrency 1
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    deploy: { resources: { limits: { memory: 256M } } }
+
   migrate:
     <<: *backend
     command: kanalchi migrate
@@ -158,6 +192,7 @@ services:
     restart: "no"
 
 volumes:
+  media_tmp:
   caddy_data:
   caddy_config:
   pg_data:
