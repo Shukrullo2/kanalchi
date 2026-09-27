@@ -107,7 +107,6 @@ export function StartHome({
                       })}
                     </span>
                   ) : null}
-                  {c.plan ? <span>{t(`plans.${c.plan}.name`)}</span> : null}
                 </span>
                 <span className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-primary">
                   {t("open")} <ArrowRightIcon size={14} />

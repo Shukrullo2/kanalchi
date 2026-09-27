@@ -89,9 +89,12 @@ class Settings(BaseSettings):
     plan_basic_uzs: int = 120_000
     plan_premium_uzs: int = 150_000
     # The one-off onboarding price is the estimated AI cost of reading the archive (in dollars,
-    # from the pipeline's measured per-post figures) times this factor, converted at this rate
-    # and rounded to the nearest thousand soums. The factor is not shown to the blogger.
-    onboarding_markup: float = 1.2
+    # from the pipeline's measured per-post figures) converted at this rate, plus a margin of at
+    # least this many soums or this share of the cost, whichever is more; rounded to the nearest
+    # thousand. The margin is not shown to the blogger: it stands in for the first month of
+    # hosting, which the blogger does not pay for.
+    onboarding_margin_min_uzs: int = 30_000
+    onboarding_margin_share: float = 0.15
     usd_uzs_rate: float = 12_800.0
 
     # --- datastores ---

@@ -20,7 +20,6 @@ import {
   EXAMPLE_URL,
   LandingShell,
 } from "@/components/landing/LandingShell";
-import { PlanCards } from "@/components/signup/PlanCards";
 import { apiFetchOrNull } from "@/lib/api";
 import { uzs } from "@/lib/format";
 import { CONTACT_URL } from "@/lib/config";
@@ -280,9 +279,6 @@ export default async function Landing() {
               price: uzs(catalogue.onboarding.sample.price_uzs),
             })}
           </p>
-          <div className="mt-8">
-            <PlanCards plans={catalogue.plans} />
-          </div>
           <a href="/start" className="btn-primary landing-cta mt-6">
             {t("pricingCta")}
             <ArrowRightIcon size={17} />

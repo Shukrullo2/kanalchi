@@ -62,6 +62,7 @@ export async function LandingShell({
       <main>{children}</main>
 
       <footer className="mt-16 border-t">
+        <p className="shell landing-footnote">{t("footnote")}</p>
         <div className="shell flex flex-wrap items-center gap-x-5 gap-y-2 py-6 text-xs text-muted-foreground">
           <span>© Osor</span>
           <a

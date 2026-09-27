@@ -473,16 +473,17 @@
     "p3b": "On your domain: a site for readers and a studio for you.",
     "finalLead": "Shall we connect",
     "finalAccent": "your channel?",
-    "finalBody": "Sign in with Telegram and add your channel link: size, price and plan on one page.",
+    "finalBody": "Sign in with Telegram and add your channel link: size and price on one page.",
     "telegram": "Message on Telegram",
     "ctaStart": "Get started",
     "signIn": "Sign in",
     "pricingEyebrow": "Pricing",
-    "pricingLead": "One import,",
-    "pricingAccent": "then a monthly plan",
-    "pricingBody": "The import is priced by the size of the channel: {posts} posts come to about {price} UZS, for example. After that, a monthly fee for the plan you choose. Paste your channel link and see the exact price in a minute.",
-    "pricingCta": "Price my channel",
-    "finalContact": "Questions? Message me on Telegram"
+    "pricingLead": "The import is paid,",
+    "pricingAccent": "hosting is free*",
+    "pricingBody": "You send a channel link, we measure it and show the price right away. That price is mostly the AI cost: every post is read, tagged and indexed ({posts} posts come to about {price} UZS, for example). Hosting the site is completely free*.",
+    "pricingCta": "See the price for my channel",
+    "finalContact": "Questions? Message me on Telegram",
+    "footnote": "* The first month of hosting is free. The fee for the months after is agreed with the admin."
   },
   "signup": {
     "metaTitle": "Connect your channel — Osor",
@@ -512,10 +513,10 @@
     "steps": {
       "estimate": "Archive size and price",
       "verify": "Prove ownership",
-      "plan": "Plan",
       "payment": "Payment",
       "import": "Import",
-      "live": "Site ready"
+      "live": "Site ready",
+      "request": "Request"
     },
     "estimating": "Asking Telegram how big the channel is…",
     "estimatedFrom": {
@@ -532,43 +533,12 @@
     "notVerified": "Not verified. Check that the bot is an administrator of the channel and try again.",
     "verifyUnavailable": "Automatic verification is not available yet; the admin checks ownership by hand.",
     "verifyLater": "You can also do this later.",
-    "choosePlan": "Choose a plan",
-    "perMonth": "/mo",
-    "plans": {
-      "archive": {
-        "name": "Archive",
-        "tagline": "The history as a site",
-        "f1": "The whole history imported and tagged",
-        "f2": "A site at your address: search, tags, statistics",
-        "f3": "Readers ask questions about the posts",
-        "f4": "No new posts are added"
-      },
-      "basic": {
-        "name": "Basic",
-        "tagline": "Archive + live updates",
-        "f1": "Everything in Archive",
-        "f2": "New posts are added automatically",
-        "f3": "Edits and deletions stay in sync",
-        "f4": "Stories and summaries keep refreshing"
-      },
-      "premium": {
-        "name": "Premium",
-        "tagline": "Basic + writing tools",
-        "f1": "Everything in Basic",
-        "f2": "The studio: ideas, drafts, archive research",
-        "f3": "Drafts in your voice and scheduled publishing",
-        "f4": "Channel watcher: daily digests of the channels you follow"
-      },
-      "aiNote": "The assistant's AI cost is billed separately, as used.",
-      "readersNote": "Reader chat comes with every plan; readers pay for their own AI usage."
-    },
     "summaryTitle": "First payment",
     "summaryImport": "Import (one-off)",
-    "summaryMonth": "First month ({plan})",
     "summaryTotal": "Total",
     "requestButton": "Request onboarding",
     "requested": "Request sent",
-    "paymentBody": "Payment goes through the admin for now: {name}, we will message you on Telegram. The import starts once it is paid.",
+    "paymentBody": "Payment goes through the admin for now: we will message you on Telegram. The import starts once it is paid.",
     "contactAdmin": "Message the admin",
     "awaitingPayment": "Awaiting payment",
     "paid": "Paid",
@@ -591,6 +561,10 @@
     "skipped": "Skipped; the admin checks ownership by hand.",
     "currency": "UZS",
     "calculating": "Calculating: asking Telegram for the channel's size and post length…",
-    "estimateFailed": "The size could not be measured automatically. Type the number of posts:"
+    "estimateFailed": "The size could not be measured automatically. Type the number of posts:",
+    "summaryHosting": "Hosting (first month)",
+    "hostingFree": "free",
+    "hostingNote": "The first month of hosting is free. You agree the fee for the months after with the admin.",
+    "requestNeedsQuote": "The archive has to be sized first."
   }
 }

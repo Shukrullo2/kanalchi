@@ -473,16 +473,17 @@
     "p3b": "O‘z domeningizda: kuzatuvchilar uchun sayt, siz uchun studiya.",
     "finalLead": "Kanalingizni",
     "finalAccent": "ulaymizmi?",
-    "finalBody": "Telegram orqali kiring, kanal havolasini qo‘shing — hajmi, narxi va tarifni bir sahifada ko‘rasiz.",
+    "finalBody": "Telegram orqali kiring, kanal havolasini qo‘shing — hajmi va narxini bir sahifada ko‘rasiz.",
     "telegram": "Telegram orqali yozish",
     "ctaStart": "Boshlash",
     "signIn": "Kirish",
     "pricingEyebrow": "Narxlar",
-    "pricingLead": "Bir marta import,",
-    "pricingAccent": "keyin oylik obuna",
-    "pricingBody": "Import narxi kanal hajmiga qarab hisoblanadi: masalan, {posts} ta post uchun taxminan {price} so‘m. Keyin tanlangan tarif bo‘yicha oylik to‘lov. Aniq narxni kanal havolasini kiritib bir daqiqada ko‘rasiz.",
-    "pricingCta": "Kanalim narxini hisoblash",
-    "finalContact": "Savol bo‘lsa, Telegramda yozing"
+    "pricingLead": "Import — pullik,",
+    "pricingAccent": "hosting — bepul*",
+    "pricingBody": "Kanal havolasini yuborasiz — biz hajmini o‘lchab, narxni darhol ko‘rsatamiz. Bu narx asosan sun’iy intellekt xarajati: har bir post o‘qib chiqiladi, teglanadi va indekslanadi (masalan, {posts} ta post ≈ {price} so‘m). Saytni joylash — hosting — esa mutlaqo bepul*.",
+    "pricingCta": "Kanalim narxini ko‘rish",
+    "finalContact": "Savol bo‘lsa, Telegramda yozing",
+    "footnote": "* Birinchi oy hosting bepul. Keyingi oylar uchun oylik to‘lov admin bilan kelishiladi."
   },
   "signup": {
     "metaTitle": "Kanalni ulash — Osor",
@@ -512,10 +513,10 @@
     "steps": {
       "estimate": "Arxiv hajmi va narxi",
       "verify": "Egalikni tasdiqlash",
-      "plan": "Tarif",
       "payment": "To‘lov",
       "import": "Import",
-      "live": "Sayt tayyor"
+      "live": "Sayt tayyor",
+      "request": "So‘rov"
     },
     "estimating": "Telegramdan kanal hajmini so‘rayapmiz…",
     "estimatedFrom": {
@@ -532,43 +533,12 @@
     "notVerified": "Tasdiqlanmadi. Bot kanalga admin qilib qo‘shilganini tekshirib, qayta urinib ko‘ring.",
     "verifyUnavailable": "Avtomatik tasdiqlash hozircha yo‘q; admin egalikni qo‘lda tekshiradi.",
     "verifyLater": "Buni keyinroq ham qilsangiz bo‘ladi.",
-    "choosePlan": "Tarifni tanlang",
-    "perMonth": "/oy",
-    "plans": {
-      "archive": {
-        "name": "Arxiv",
-        "tagline": "Tarix — sayt sifatida",
-        "f1": "Butun tarix import qilinadi va teglanadi",
-        "f2": "Sizning manzilingizda sayt: qidiruv, teglar, statistika",
-        "f3": "O‘quvchilar postlar bo‘yicha savol beradi",
-        "f4": "Yangi postlar qo‘shilmaydi"
-      },
-      "basic": {
-        "name": "Asosiy",
-        "tagline": "Arxiv + jonli yangilanish",
-        "f1": "Arxiv tarifidagi hamma narsa",
-        "f2": "Yangi postlar avtomatik qo‘shiladi",
-        "f3": "Tahrir va o‘chirishlar sinxronlanadi",
-        "f4": "Syujetlar va xulosalar yangilanib turadi"
-      },
-      "premium": {
-        "name": "Premium",
-        "tagline": "Asosiy + yozuv vositalari",
-        "f1": "Asosiy tarifidagi hamma narsa",
-        "f2": "Studiya: g‘oyalar, qoralamalar, arxiv tahlili",
-        "f3": "O‘z uslubingizda qoralama va rejali nashr",
-        "f4": "Kanal kuzatuvchi: kuzatgan kanallaringiz bo‘yicha kunlik xulosa"
-      },
-      "aiNote": "Yordamchining AI xarajati alohida, ishlatilganicha hisoblanadi.",
-      "readersNote": "O‘quvchilar chati har tarifda bor; AI xarajatini o‘quvchilar o‘zlari to‘laydi."
-    },
     "summaryTitle": "Birinchi to‘lov",
     "summaryImport": "Import (bir marta)",
-    "summaryMonth": "Birinchi oy ({plan})",
     "summaryTotal": "Jami",
     "requestButton": "Ulashni so‘rash",
     "requested": "So‘rov yuborildi",
-    "paymentBody": "To‘lov hozircha admin orqali: {name}, siz bilan Telegramda bog‘lanamiz. To‘lovdan keyin import boshlanadi.",
+    "paymentBody": "To‘lov hozircha admin orqali: siz bilan Telegramda bog‘lanamiz. To‘lovdan keyin import boshlanadi.",
     "contactAdmin": "Adminga yozish",
     "awaitingPayment": "To‘lov kutilmoqda",
     "paid": "To‘langan",
@@ -591,6 +561,10 @@
     "skipped": "O‘tkazib yuborildi — egalikni admin qo‘lda tekshiradi.",
     "currency": "so‘m",
     "calculating": "Hisoblanmoqda: Telegramdan kanal hajmi va postlar uzunligi so‘ralmoqda…",
-    "estimateFailed": "Hajmni avtomatik aniqlab bo‘lmadi. Postlar sonini o‘zingiz yozing:"
+    "estimateFailed": "Hajmni avtomatik aniqlab bo‘lmadi. Postlar sonini o‘zingiz yozing:",
+    "summaryHosting": "Hosting (birinchi oy)",
+    "hostingFree": "bepul",
+    "hostingNote": "Birinchi oy hosting bepul. Keyingi oylar uchun oylik to‘lovni admin bilan kelishasiz.",
+    "requestNeedsQuote": "Avval arxiv hajmi hisoblansin."
   }
 }

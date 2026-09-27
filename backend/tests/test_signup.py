@@ -29,16 +29,19 @@ def test_parse_channel_username(link: str, expected: str | None) -> None:
     assert parse_channel_username(link) == expected
 
 
-def test_quote_is_the_marked_up_ai_cost_in_whole_thousands_of_soums() -> None:
+def test_quote_is_the_ai_cost_plus_a_margin_in_whole_thousands_of_soums() -> None:
     s = get_settings()
     small = billing.quote_for_posts(10, source="manual")
     large = billing.quote_for_posts(20_000, source="telegram", avg_post_tokens=320, text_share=0.95)
     assert large["price_uzs"] > small["price_uzs"] > 0
     assert large["price_uzs"] % 1000 == 0
-    expected = large["ai_usd"] * s.onboarding_markup * s.usd_uzs_rate
+    # A tiny archive still carries the minimum margin; a big one carries the share.
+    assert small["margin_uzs"] == s.onboarding_margin_min_uzs
+    assert abs(large["margin_uzs"] - large["ai_usd"] * s.usd_uzs_rate * s.onboarding_margin_share) < 2
+    expected = large["ai_usd"] * s.usd_uzs_rate + large["margin_uzs"]
     assert abs(large["price_uzs"] - expected) <= 500
     assert large["source"] == "telegram" and large["posts"] == 20_000
-    # The blogger sees the price, never the markup or the dollar cost behind it.
+    # The blogger sees the price, never the margin or the dollar cost behind it.
     assert set(billing.public_quote(large)) == {"posts", "price_uzs", "source", "computed_at"}
 
 

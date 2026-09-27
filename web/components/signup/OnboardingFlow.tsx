@@ -4,12 +4,12 @@ import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 import { ArrowLeftIcon, ExternalIcon, SendIcon } from "@/components/Icons";
-import { PlanCards } from "@/components/signup/PlanCards";
 import { call, patch, post } from "@/lib/client";
 import { compactNumber, fullDate, uzs } from "@/lib/format";
-import type { Plan, PlanId, SignupChannel } from "@/lib/types";
+import type { SignupChannel } from "@/lib/types";
 
-type StepKey = "estimate" | "verify" | "plan" | "payment" | "import" | "live";
+type StepKey =
+  "estimate" | "verify" | "request" | "payment" | "import" | "live";
 
 /**
  * One channel's road from "added" to "live", as a vertical checklist. Every step is derived
@@ -18,12 +18,10 @@ type StepKey = "estimate" | "verify" | "plan" | "payment" | "import" | "live";
  */
 export function OnboardingFlow({
   initial,
-  plans,
   botUsername,
   contactUrl,
 }: {
   initial: SignupChannel;
-  plans: Plan[];
   botUsername: string | null;
   contactUrl: string | null;
 }) {
@@ -79,7 +77,7 @@ export function OnboardingFlow({
   const done: Record<StepKey, boolean> = {
     estimate: ch.quote !== null,
     verify: ch.verified || ch.verify_skipped,
-    plan: ch.plan !== null && requested,
+    request: requested,
     payment: paid,
     import: imported,
     live: ch.status === "active",
@@ -87,7 +85,7 @@ export function OnboardingFlow({
   const order: StepKey[] = [
     "estimate",
     "verify",
-    "plan",
+    "request",
     "payment",
     "import",
     "live",
@@ -95,11 +93,14 @@ export function OnboardingFlow({
   // Verification is optional, so a later step can be done while an earlier one is not: every
   // step up to one past the furthest completed one is open, the rest wait their turn.
   const furthest = order.reduce((acc, k, i) => (done[k] ? i : acc), -1);
-  const open = new Set(order.filter((k, i) => done[k] || i <= furthest + 1));
-  const monthly =
-    ch.plan_monthly_uzs ??
-    plans.find((p) => p.id === ch.plan)?.monthly_uzs ??
-    null;
+  // The request is the one thing the blogger must do, so it opens as soon as there is a price,
+  // whether or not they bothered with the optional ownership check above it.
+  const open = new Set(
+    order.filter(
+      (k, i) =>
+        done[k] || i <= furthest + 1 || (k === "request" && ch.quote !== null),
+    ),
+  );
   // Telegram is asked for the size as soon as the channel is added; the typed estimate is
   // only offered once that has failed (or has not answered within a few minutes).
   const calculating =
@@ -289,56 +290,34 @@ export function OnboardingFlow({
         </Step>
 
         {/* 3 · plan */}
-        <Step k="plan" done={done.plan} open={open} title={t("steps.plan")}>
+        <Step
+          k="request"
+          done={done.request}
+          open={open}
+          title={t("steps.request")}
+        >
           {requested ? (
             <p className="text-sm">
-              <strong>{ch.plan ? t(`plans.${ch.plan}.name`) : "—"}</strong>
-              {monthly !== null ? (
-                <span className="text-muted-foreground">
-                  {" "}
-                  · {uzs(monthly)} {t("currency")}
-                  {t("perMonth")}
-                </span>
-              ) : null}{" "}
-              <span className="chip ml-2">{t("requested")}</span>
+              <span className="chip">{t("requested")}</span>
             </p>
-          ) : (
+          ) : ch.quote ? (
             <>
-              <p className="mb-3 text-sm text-muted-foreground">
-                {t("choosePlan")}
-              </p>
-              <PlanCards
-                plans={plans}
-                selected={ch.plan}
-                onSelect={(id: PlanId) =>
-                  void run("plan", () =>
-                    patch<SignupChannel>(`/api/signup/channels/${ch.id}`, {
-                      plan: id,
-                    }),
-                  )
-                }
-              />
-              {ch.plan && ch.quote ? (
-                <dl className="flow-summary">
-                  <dt>{t("summaryTitle")}</dt>
-                  <dd />
-                  <dt className="text-muted-foreground">
-                    {t("summaryImport")}
-                  </dt>
-                  <dd>{uzs(ch.quote.price_uzs)}</dd>
-                  <dt className="text-muted-foreground">
-                    {t("summaryMonth", { plan: t(`plans.${ch.plan}.name`) })}
-                  </dt>
-                  <dd>{monthly !== null ? uzs(monthly) : "—"}</dd>
-                  <dt>{t("summaryTotal")}</dt>
-                  <dd>
-                    {uzs(ch.quote.price_uzs + (monthly ?? 0))} {t("currency")}
-                  </dd>
-                </dl>
-              ) : null}
+              <dl className="flow-summary">
+                <dt>{t("summaryTitle")}</dt>
+                <dd />
+                <dt className="text-muted-foreground">{t("summaryImport")}</dt>
+                <dd>{uzs(ch.quote.price_uzs)}</dd>
+                <dt className="text-muted-foreground">{t("summaryHosting")}</dt>
+                <dd>{t("hostingFree")}</dd>
+                <dt>{t("summaryTotal")}</dt>
+                <dd>
+                  {uzs(ch.quote.price_uzs)} {t("currency")}
+                </dd>
+              </dl>
+              <p className="landing-note">{t("hostingNote")}</p>
               <button
                 className="btn-primary mt-4"
-                disabled={!ch.plan || !ch.quote || busy === "request"}
+                disabled={busy === "request"}
                 onClick={() =>
                   void run("request", async () => {
                     const next = await post<SignupChannel>(
@@ -353,6 +332,10 @@ export function OnboardingFlow({
                 {t("requestButton")}
               </button>
             </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {t("requestNeedsQuote")}
+            </p>
           )}
         </Step>
 
@@ -376,7 +359,7 @@ export function OnboardingFlow({
           ) : requested ? (
             <>
               <p className="text-sm text-muted-foreground">
-                {t("paymentBody", { name: t("awaitingPayment").toLowerCase() })}
+                {t("paymentBody")}
               </p>
               {contactUrl ? (
                 <a

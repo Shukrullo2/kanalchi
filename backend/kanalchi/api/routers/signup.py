@@ -42,10 +42,12 @@ def parse_channel_username(link: str) -> str | None:
 
 @router.get("/plans")
 async def plans() -> dict:
-    """Public: the plans and how the onboarding price is made, for the landing page."""
+    """Public: what the landing page says about money. The import is priced per channel; hosting
+    is free for the first month, and the plans are agreed with the admin after that."""
     return {
         "currency": billing.CURRENCY,
         "plans": billing.plan_catalogue(),
+        "first_month_free": True,
         "onboarding": {"sample": billing.public_quote(billing.quote_for_posts(1000, source="sample"))},
     }
 
@@ -272,12 +274,14 @@ async def verify_owner(
 async def request_onboarding(
     tenant_id: int, user: SessionData = Depends(require_user), db: AsyncSession = Depends(get_db)
 ) -> dict:
-    """Plan chosen, quote seen: ask the admin to take payment and start the import."""
+    """Quote seen: ask the admin to take the import payment and start the import. The first
+    month of hosting is free; the plan for the months after is agreed with the admin, so a
+    self-registered channel starts on basic (live updates, no writing tools) unless changed."""
     tenant = await _mine(db, user, tenant_id)
-    if tenant.plan is None:
-        raise HTTPException(400, "choose a plan first")
     if tenant.onboarding_quote is None:
         raise HTTPException(400, "the archive has not been sized yet")
+    if tenant.plan is None:
+        tenant.plan = "basic"
     if tenant.subscription_status == "none":
         tenant.subscription_status = "pending"
     signup = {**((tenant.settings or {}).get("signup") or {}), "requested_at": datetime.now(UTC).isoformat()}
@@ -285,8 +289,9 @@ async def request_onboarding(
     quote = tenant.onboarding_quote
     await _notify(
         f"Onboarding requested: @{signup.get('username')} ({tenant.domain})\n"
-        f"plan {tenant.plan} ({billing.plan_price_uzs(tenant.plan)} UZS/mo), "
-        f"import {quote.get('price_uzs')} UZS for {quote.get('posts')} posts (AI ≈ ${quote.get('ai_usd')})\n"
+        f"import {quote.get('price_uzs')} UZS for {quote.get('posts')} posts "
+        f"(AI ≈ ${quote.get('ai_usd')}, margin {quote.get('margin_uzs')} UZS); first month of hosting free, "
+        f"then plan {tenant.plan} ({billing.plan_price_uzs(tenant.plan)} UZS/mo)\n"
         f"by {user.name} (tg {user.tg_user_id}" + (f", @{user.username}" if user.username else "") + ")"
     )
     return await _out(db, tenant, user)

@@ -58,8 +58,9 @@ def quote_for_posts(
 ) -> dict[str, Any]:
     """Price the import of an archive of `posts` messages.
 
-    `source` records where the count came from: "telegram" (measured) or "manual" (typed in by
-    the blogger), so a measured figure is never overwritten by a guess. The measured average
+    The price is the AI cost plus a margin that pays for the first month of hosting; the blogger
+    sees one number. `source` records where the count came from: "telegram" (measured) or
+    "manual" (typed in by the blogger), so a measured figure is never overwritten by a guess. The measured average
     post length and share of posts with text, when the preview job sampled them, bring the
     estimate within a few percent of what the first real channel cost.
     """
@@ -73,10 +74,13 @@ def quote_for_posts(
         text_share=text_share if text_share is not None else DEFAULT_TEXT_SHARE,
     )
     ai_usd = round(sum(lines.values()), 2)
-    price_uzs = int(round(ai_usd * s.onboarding_markup * s.usd_uzs_rate / 1000.0)) * 1000
+    ai_uzs = ai_usd * s.usd_uzs_rate
+    margin_uzs = max(float(s.onboarding_margin_min_uzs), ai_uzs * s.onboarding_margin_share)
+    price_uzs = int(round((ai_uzs + margin_uzs) / 1000.0)) * 1000
     return {
         "posts": posts,
         "ai_usd": ai_usd,
+        "margin_uzs": int(round(margin_uzs)),
         "price_uzs": price_uzs,
         "source": source,
         "avg_post_tokens": int(avg_post_tokens) if avg_post_tokens else None,

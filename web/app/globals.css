@@ -534,37 +534,12 @@
   .landing-compare-osor li::before { content: "✓"; color: var(--primary); font-weight: 800; }
 
   /* --- Plans and the sign-up flow (osor.uz/start) ------------------------------ */
-  .plan-grid { display: grid; gap: 1rem; }
-  @media (min-width: 48rem) { .plan-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-  .plan-card {
-    display: flex; flex-direction: column; align-items: stretch; gap: 0.35rem; text-align: left;
-    border-radius: 1rem; border: 1px solid var(--border); background: var(--surface);
-    padding: 1.35rem 1.35rem 1.5rem; color: inherit; font: inherit; cursor: default;
-    transition: border-color 0.18s, transform 0.18s, box-shadow 0.18s;
-  }
-  button.plan-card { cursor: pointer; }
-  button.plan-card:hover { border-color: var(--border-strong); transform: translateY(-2px); box-shadow: var(--shadow-md); }
-  .plan-card[data-selected] { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
-  .plan-card[data-plan="premium"] {
-    background:
-      radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--primary) 14%, transparent), transparent 55%),
-      var(--surface);
-  }
-  .plan-name { font-family: var(--font-display); font-weight: 800; font-size: 1.2rem; letter-spacing: -0.01em; }
-  .plan-tagline { font-size: 0.875rem; color: var(--muted-foreground); }
-  .plan-price { margin-top: 0.6rem; font-family: var(--font-display); font-weight: 800; font-size: 2rem; line-height: 1; }
-  .plan-price small { margin-left: 0.2rem; font-family: var(--font-sans); font-weight: 600; font-size: 0.875rem; color: var(--muted-foreground); }
-  .plan-features { margin-top: 1rem; display: grid; gap: 0.5rem; font-size: 0.9rem; line-height: 1.45; }
-  .plan-features li { position: relative; padding-left: 1.5rem; }
-  .plan-features li::before { content: "✓"; position: absolute; left: 0; color: var(--primary); font-weight: 800; }
-  .plan-features li[data-off] { color: var(--muted-foreground); }
-  .plan-features li[data-off]::before { content: "—"; color: var(--muted-foreground); }
+  /* The "coming soon" badge on the studio's channel-watcher tab. */
   .plan-soon {
     margin-left: 0.4rem; display: inline-block; border-radius: 999px; padding: 0.05rem 0.5rem;
     font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
     color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent);
   }
-  .plan-note { margin-top: 0.9rem; font-size: 0.8125rem; color: var(--muted-foreground); }
 
   .signup-add { margin-top: 1.75rem; max-width: 40rem; }
   .signup-add-row { margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.6rem; }
@@ -600,6 +575,7 @@
   .flow-summary dt:first-child, .flow-summary dt:nth-last-child(2) { font-weight: 700; }
   .flow-summary dd { text-align: right; font-variant-numeric: tabular-nums; }
   .flow-summary dd:last-child { font-weight: 800; }
+  .landing-footnote { padding-top: 1.25rem; font-size: 0.8125rem; color: var(--muted-foreground); }
 
   /* --- Search filters -------------------------------------------------------- */
   .search-filters { display: flex; flex-direction: column; gap: 1.1rem; font-size: 0.875rem; }

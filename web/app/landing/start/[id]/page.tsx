@@ -6,7 +6,7 @@ import { OnboardingFlow } from "@/components/signup/OnboardingFlow";
 import { apiFetchOrNull } from "@/lib/api";
 import { getMe } from "@/lib/auth";
 import { CONTACT_URL } from "@/lib/config";
-import type { PlanCatalogue, SignupChannel } from "@/lib/types";
+import type { SignupChannel } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -25,9 +25,8 @@ export default async function ChannelStartPage({
   const me = await getMe();
   if (!me.authenticated || me.role !== "user") redirect("/start");
 
-  const [channel, catalogue, widget] = await Promise.all([
+  const [channel, widget] = await Promise.all([
     apiFetchOrNull<SignupChannel>(`/api/signup/channels/${id}`),
-    apiFetchOrNull<PlanCatalogue>("/api/signup/plans"),
     apiFetchOrNull<{ bot_username: string | null }>("/api/auth/widget"),
   ]);
   if (!channel) notFound();
@@ -36,7 +35,6 @@ export default async function ChannelStartPage({
     <LandingShell>
       <OnboardingFlow
         initial={channel}
-        plans={catalogue?.plans ?? []}
         botUsername={widget?.bot_username ?? null}
         contactUrl={CONTACT_URL || null}
       />
