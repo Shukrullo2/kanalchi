@@ -39,7 +39,11 @@ def test_quote_is_the_ai_cost_plus_a_margin_in_whole_thousands_of_soums() -> Non
     assert small["margin_uzs"] == s.onboarding_margin_min_uzs
     assert abs(large["margin_uzs"] - large["ai_usd"] * s.usd_uzs_rate * s.onboarding_margin_share) < 2
     expected = large["ai_usd"] * s.usd_uzs_rate + large["margin_uzs"]
-    assert abs(large["price_uzs"] - expected) <= 500
+    assert 0 <= large["price_uzs"] - expected < 1000
+    # The margin is a floor: whatever the AI cost, the price is at least that much above it.
+    for posts in (1, 7, 50, 333, 4_000):
+        q = billing.quote_for_posts(posts, source="manual")
+        assert q["price_uzs"] - q["ai_usd"] * s.usd_uzs_rate >= s.onboarding_margin_min_uzs
     assert large["source"] == "telegram" and large["posts"] == 20_000
     # The blogger sees the price, never the margin or the dollar cost behind it.
     assert set(billing.public_quote(large)) == {"posts", "price_uzs", "source", "computed_at"}

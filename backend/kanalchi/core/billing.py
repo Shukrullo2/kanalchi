@@ -6,6 +6,7 @@ marks the tenant paid. This module only decides the numbers and the entitlements
 
 from __future__ import annotations
 
+import math
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -76,7 +77,8 @@ def quote_for_posts(
     ai_usd = round(sum(lines.values()), 2)
     ai_uzs = ai_usd * s.usd_uzs_rate
     margin_uzs = max(float(s.onboarding_margin_min_uzs), ai_uzs * s.onboarding_margin_share)
-    price_uzs = int(round((ai_uzs + margin_uzs) / 1000.0)) * 1000
+    # Rounded up to the next thousand, so the margin is never rounded below its floor.
+    price_uzs = int(math.ceil((ai_uzs + margin_uzs) / 1000.0)) * 1000
     return {
         "posts": posts,
         "ai_usd": ai_usd,
