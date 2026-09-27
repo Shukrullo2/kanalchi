@@ -39,16 +39,22 @@ STALE_BATCH = timedelta(hours=24)
 RETRY_AFTER_FAILURE = timedelta(minutes=20)
 MIN_POSTS_TO_PROFILE = 5
 
-# Measured on the first real channel (12.3k posts, 2026-09-22) for the steps that are not
-# priced per token here. They make the quote read "about $8", which is what it is for.
+# Measured on the first real channel (12,965 posts, 12,267 extraction requests, 2026-09-22; ledger
+# re-read 2026-09-27) so the quote matches what the import actually bills. Per extraction request the
+# ledger shows 660 uncached input tokens for a 321-token post, 7,716 cache-read tokens (the shared
+# prefix: system prompt, channel profile and tag context), 75 cache-write tokens and 965 output
+# tokens. Embedding used 3.8x a post's tokens (text plus the Latin summary, in chunks). Taxonomy and
+# summaries cost $5.54 and $2.35 for that archive, i.e. the per-post figures below.
 DISCOVERY_USD = 0.70
-TAXONOMY_USD_PER_POST = 0.00045
-SUMMARIES_USD_PER_POST = 0.0002
-SYSTEM_PROMPT_TOKENS = 2500  # the cached prefix of every extraction request
-PER_POST_OVERHEAD_TOKENS = 200  # the user-turn framing around the post text
+TAXONOMY_USD_PER_POST = 0.00043
+SUMMARIES_USD_PER_POST = 0.00018
+SYSTEM_PROMPT_TOKENS = 7_700  # the cached prefix of every extraction request
+PER_POST_OVERHEAD_TOKENS = 340  # the user-turn framing around the post text
+CACHE_WRITE_TOKENS_PER_POST = 75  # the prefix is re-written now and then as batches roll
 CHARS_PER_TOKEN = 3.2  # Cyrillic and Latin Uzbek both tokenise densely
 DEFAULT_POST_TOKENS = 280
-DEFAULT_OUTPUT_TOKENS = 1100  # extraction JSON plus adaptive thinking, measured
+DEFAULT_OUTPUT_TOKENS = 965  # extraction JSON plus adaptive thinking, measured
+EMBED_TOKENS_PER_POST_TOKEN = 3.8
 DEFAULT_TEXT_SHARE = 0.9  # posts with any text, for a channel not yet imported
 
 STAGES = ("import", "profile", "embed", "extract", "taxonomy")
@@ -269,14 +275,13 @@ def estimate_lines(
         Usage(
             input_tokens=int(avg_tokens) + PER_POST_OVERHEAD_TOKENS,
             cache_read_tokens=SYSTEM_PROMPT_TOKENS,
+            cache_write_tokens=CACHE_WRITE_TOKENS_PER_POST,
             output_tokens=DEFAULT_OUTPUT_TOKENS,
         ),
         batch=True,
     )
     to_embed = max(0, total - embedded)
-    # The original text and the synthetic Latin summary, in chunks: measured at about four
-    # times the post's own tokens on the first real channel (2026-09-25).
-    embedding = embed_cost_usd(s.embed_model, int(to_embed * avg_tokens * 4))
+    embedding = embed_cost_usd(s.embed_model, int(to_embed * avg_tokens * EMBED_TOKENS_PER_POST_TOKEN))
     return {
         "extraction": round(per_post * to_extract, 2),
         "embedding": round(embedding, 2),
