@@ -67,17 +67,24 @@ export function ChatView({
 
     const sessionId = await ensureSession();
     if (!sessionId) {
-      setTurns((prev) => patchLast(prev, { pending: false, error: labels.failed }));
+      setTurns((prev) =>
+        patchLast(prev, { pending: false, error: labels.failed }),
+      );
       setBusy(false);
       return;
     }
 
     await streamTurn(sessionId, question, {
       fallbacks: { unavailable: labels.unavailable, wrong: labels.wrong },
-      onDelta: (chunk) => setTurns((prev) => patchLast(prev, { content: lastContent(prev) + chunk })),
+      onDelta: (chunk) =>
+        setTurns((prev) =>
+          patchLast(prev, { content: lastContent(prev) + chunk }),
+        ),
       onTool: (name) => setTool(name),
-      onCitations: (cards: ChatCitation[]) => setTurns((prev) => patchLast(prev, { cards })),
-      onError: (message) => setTurns((prev) => patchLast(prev, { error: message })),
+      onCitations: (cards: ChatCitation[]) =>
+        setTurns((prev) => patchLast(prev, { cards })),
+      onError: (message) =>
+        setTurns((prev) => patchLast(prev, { error: message })),
       onDone: () => {
         setTool(null);
         setBusy(false);
@@ -87,7 +94,11 @@ export function ChatView({
   }
 
   if (!suggestions.enabled) {
-    return <div className="card-surface p-12 text-center text-sm text-muted-foreground">{labels.disabled}</div>;
+    return (
+      <div className="card-surface p-12 text-center text-sm text-muted-foreground">
+        {labels.disabled}
+      </div>
+    );
   }
 
   return (
@@ -97,10 +108,16 @@ export function ChatView({
           <span className="grid h-11 w-11 place-items-center rounded-2xl bg-accent text-accent-foreground">
             <SparkIcon size={20} />
           </span>
-          <p className="max-w-sm text-pretty text-sm text-muted-foreground">{labels.intro}</p>
+          <p className="max-w-sm text-pretty text-sm text-muted-foreground">
+            {labels.intro}
+          </p>
           <div className="flex flex-wrap justify-center gap-1.5">
             {suggestions.suggestions.map((s) => (
-              <button key={s} onClick={() => ask(s)} className="btn-ghost text-xs">
+              <button
+                key={s}
+                onClick={() => ask(s)}
+                className="btn-ghost text-xs"
+              >
                 {s}
               </button>
             ))}
@@ -132,7 +149,10 @@ export function ChatView({
                   ) : null}
                 </div>
                 {turn.error ? (
-                  <p className="text-sm" style={{ color: "var(--destructive)" }}>
+                  <p
+                    className="text-sm"
+                    style={{ color: "var(--destructive)" }}
+                  >
                     {turn.error}
                   </p>
                 ) : null}
@@ -148,8 +168,12 @@ export function ChatView({
                             href={c.url}
                             className="flex items-baseline gap-2 rounded-md px-2 py-1 text-sm transition-colors hover:bg-surface-2"
                           >
-                            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">#{c.id}</span>
-                            <span className="min-w-0 flex-1 truncate">{c.title}</span>
+                            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                              #{c.id}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate">
+                              {c.title}
+                            </span>
                             <span className="shrink-0 text-xs text-muted-foreground">
                               {postDate(c.date, locale)}
                             </span>
@@ -187,7 +211,10 @@ export function ChatView({
           maxLength={2000}
           className="input-field py-3 shadow-sm"
         />
-        <button disabled={busy || !draft.trim()} className="btn-primary px-4 shadow-sm">
+        <button
+          disabled={busy || !draft.trim()}
+          className="btn-primary px-4 shadow-sm"
+        >
           {labels.send}
         </button>
       </form>
@@ -202,7 +229,7 @@ function Answer({ text, cards }: { text: string; cards: ChatCitation[] }) {
       {parseCitations(text).map((part, i) =>
         part.kind === "text" ? (
           <span key={i} className="whitespace-pre-wrap">
-            {part.value}
+            {emphasis(part.value)}
           </span>
         ) : (
           <Link
@@ -217,6 +244,19 @@ function Answer({ text, cards }: { text: string; cards: ChatCitation[] }) {
       )}
     </>
   );
+}
+
+/** The model writes **bold** the Markdown way; render it rather than showing the asterisks. */
+function emphasis(text: string): React.ReactNode[] {
+  return text
+    .split(/(\*\*[^*\n]+\*\*)/g)
+    .map((piece, i) =>
+      piece.startsWith("**") && piece.endsWith("**") && piece.length > 4 ? (
+        <strong key={i}>{piece.slice(2, -2)}</strong>
+      ) : (
+        piece
+      ),
+    );
 }
 
 function lastContent(turns: ChatTurn[]): string {
