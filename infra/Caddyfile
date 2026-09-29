@@ -16,6 +16,12 @@
 
 # Shared by the admin panel and every tenant domain.
 (app) {
+	# One JSON line per request on stdout (`docker compose logs caddy`), with the reader's
+	# address as resolved above, so visits can be counted; nothing else records them.
+	log {
+		output stdout
+		format json
+	}
 	encode zstd gzip
 	header {
 		X-Content-Type-Options nosniff
