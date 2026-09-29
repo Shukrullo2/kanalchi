@@ -77,17 +77,12 @@ async def channel_resolve(
         return out
 
 
-@app.task(queue="telegram", name="telegram.channel_preview", retry=1)
-async def channel_preview(tenant_id: int) -> dict:
-    """Size up a self-registered channel for its sign-up quote (no join, no import)."""
-    from kanalchi.telegram.onboarding import mark_preview_failed, preview_channel
+@app.task(queue="telegram", name="telegram.channel_quote", retry=0)
+async def channel_quote(username: str) -> dict:
+    """Measure a public channel for its sign-up quote (no join, no import, no tenant)."""
+    from kanalchi.telegram.onboarding import measure_channel
 
-    try:
-        return await preview_channel(tenant_id)
-    except Exception:
-        # The sign-up page falls back to asking the blogger for a post count.
-        await mark_preview_failed(tenant_id)
-        raise
+    return await measure_channel(username)
 
 
 @app.task(queue="telegram", name="telegram.backfill_chunk", retry=2)

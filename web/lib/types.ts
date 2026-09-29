@@ -42,11 +42,12 @@ export type OnboardingQuote = {
   posts: number;
   /** The one-off import price in soums, whole thousands. */
   price_uzs: number;
-  /** telegram (measured) | manual (typed in by the blogger) | sample */
+  /** telegram (measured) | web (from the t.me/s page) | manual (older quotes) | sample */
   source: string;
   computed_at: string;
   /** Admin only: the estimated AI cost the price was made from. */
   ai_usd?: number;
+  margin_uzs?: number;
   avg_post_tokens?: number | null;
 };
 
@@ -56,35 +57,27 @@ export type PlanCatalogue = {
   onboarding: { sample: OnboardingQuote };
 };
 
-/** A channel as its owner sees it on the sign-up pages. */
-export type SignupChannel = {
-  id: number;
-  slug: string;
-  domain: string;
-  url: string;
+/** What importing a public channel costs, as anyone on osor.uz/start can ask. */
+export type ChannelQuote = {
+  username: string;
   title: string;
-  status: string;
-  plan: PlanId | null;
-  plan_monthly_uzs: number | null;
-  subscription_status: SubscriptionStatus;
-  subscription_paid_until: string | null;
-  onboarding_paid_at: string | null;
+  participants_count: number | null;
+  /** pending: Telegram is measuring it (`quote` may already hold the web estimate); failed: offer a retry. */
+  status: "pending" | "done" | "failed";
   quote: OnboardingQuote | null;
-  /** pending: Telegram is being asked for the size; failed: the blogger is asked instead. */
-  preview_status: "pending" | "done" | "failed";
-  requested_at: string | null;
-  verified: boolean;
-  /** The blogger chose not to prove ownership through the bot; the admin checks by hand. */
-  verify_skipped: boolean;
-  channel: {
-    username: string | null;
-    title: string | null;
-    participants_count: number | null;
-    posts_estimate: number | null;
-    resolved: boolean;
-  };
-  progress: { imported: number; total: number | null; backfill_status: string | null };
+};
+
+/** A priced channel as the admin sees it: the full quote, AI cost and margin included. */
+export type AdminChannelQuote = {
+  username: string;
+  title: string;
+  participants_count: number | null;
+  status: "pending" | "done" | "failed";
+  quote: OnboardingQuote | null;
+  error: string | null;
+  times_asked: number;
   created_at: string;
+  updated_at: string;
 };
 
 export type AdminSignup = {

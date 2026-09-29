@@ -46,8 +46,8 @@ type Feature = {
  * osor.uz: what the service does, for the people who read a channel and for the
  * person who writes it, what it costs, and the way in. Every feature card is a
  * screenshot of the example channel and opens that very page. Every button that
- * asks for something leads to /start, where a blogger signs in with Telegram and
- * adds their channel; the owner's Telegram stays as the place for questions.
+ * asks for something leads to /start, where anyone prices a channel without signing in
+ * and then messages the owner on Telegram.
  */
 export default async function Landing() {
   const [t, catalogue] = await Promise.all([

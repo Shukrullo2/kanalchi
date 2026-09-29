@@ -3,13 +3,14 @@ import { getTranslations } from "next-intl/server";
 import { State } from "@/components/admin/StatusDot";
 import { apiFetch } from "@/lib/api";
 import { compactNumber, uzs } from "@/lib/format";
-import type { AdminSignup } from "@/lib/types";
+import type { AdminChannelQuote, AdminSignup } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-/** Everyone who signed in on the platform domain, and what they asked for. */
+/** Channels priced on osor.uz/start (no sign-in needed), and the people who signed in there before that. */
 export default async function SignupsPage() {
-  const [signups, t] = await Promise.all([
+  const [quotes, signups, t] = await Promise.all([
+    apiFetch<AdminChannelQuote[]>("/api/admin/quotes", { admin: true }),
     apiFetch<AdminSignup[]>("/api/admin/signups", { admin: true }),
     getTranslations("admin"),
   ]);
@@ -28,6 +29,9 @@ export default async function SignupsPage() {
         </span>
       </div>
 
+      <QuoteList quotes={quotes} />
+
+      <h2 className="mt-10 border-b pb-3 text-lg font-semibold">Signed in (old flow)</h2>
       {signups.length === 0 ? (
         <p className="py-16 text-center text-sm text-muted-foreground">
           Nobody has signed up on the platform domain yet.
@@ -117,5 +121,60 @@ export default async function SignupsPage() {
         </ul>
       )}
     </div>
+  );
+}
+
+function QuoteList({ quotes }: { quotes: AdminChannelQuote[] }) {
+  if (quotes.length === 0) {
+    return (
+      <p className="py-10 text-center text-sm text-muted-foreground">
+        Nobody has priced a channel yet.
+      </p>
+    );
+  }
+  return (
+    <ul className="rows">
+      {quotes.map((q) => (
+        <li key={q.username} className="row">
+          <span className="row-margin text-xs text-muted-foreground">
+            {new Date(q.updated_at).toISOString().slice(0, 10)}
+          </span>
+          <div className="row-body">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
+              <a
+                href={`https://t.me/${q.username}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[0.9375rem] font-medium hover:text-primary"
+              >
+                @{q.username}
+              </a>
+              {q.title ? <span className="text-muted-foreground">{q.title}</span> : null}
+              {q.participants_count ? (
+                <span className="tnum text-xs text-muted-foreground">
+                  {compactNumber(q.participants_count)} subscribers
+                </span>
+              ) : null}
+              {q.times_asked > 1 ? (
+                <span className="tnum text-xs text-muted-foreground">asked {q.times_asked}×</span>
+              ) : null}
+              <State status={q.status === "done" ? "active" : q.status === "failed" ? "error" : "onboarding"} label={q.status} />
+            </div>
+            {q.quote ? (
+              <p className="tnum mt-1 text-xs text-muted-foreground">
+                {compactNumber(q.quote.posts)} posts ({q.quote.source}) · import{" "}
+                <span className="text-foreground">{uzs(q.quote.price_uzs)} UZS</span> · AI ≈ $
+                {q.quote.ai_usd} · margin {uzs(q.quote.margin_uzs ?? 0)} UZS
+              </p>
+            ) : null}
+            {q.error ? (
+              <p className="mt-1 text-xs" style={{ color: "var(--warning)" }}>
+                {q.error}
+              </p>
+            ) : null}
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }

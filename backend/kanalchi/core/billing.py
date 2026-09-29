@@ -95,3 +95,22 @@ def public_quote(quote: dict[str, Any] | None) -> dict[str, Any] | None:
     if quote is None:
         return None
     return {k: quote[k] for k in ("posts", "price_uzs", "source", "computed_at") if k in quote}
+
+
+def quote_report(
+    username: str, title: str, participants: int | None, quote: dict[str, Any] | None, note: str
+) -> str:
+    """The Telegram message the admins get each time someone prices a channel on osor.uz/start.
+    Visitors are anonymous, so the channel itself is the lead: t.me/<username> finds its owner."""
+    head = f"💰 {note}: @{username}" + (f" — {title}" if title else "")
+    lines = [head, f"https://t.me/{username}"]
+    if participants:
+        lines.append(f"{participants:,} subscribers".replace(",", " "))
+    if quote:
+        lines.append(
+            f"{quote.get('posts'):,} posts ({quote.get('source')}) → import {quote.get('price_uzs'):,} UZS".replace(
+                ",", " "
+            )
+            + f" (AI ≈ ${quote.get('ai_usd')}, margin {quote.get('margin_uzs'):,} UZS)".replace(",", " ")
+        )
+    return "\n".join(lines)

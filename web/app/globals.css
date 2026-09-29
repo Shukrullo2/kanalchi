@@ -544,22 +544,9 @@
   .signup-add { margin-top: 1.75rem; max-width: 40rem; }
   .signup-add-row { margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.6rem; }
   .signup-add-row .input-field { flex: 1 1 16rem; }
-  .signup-channel { gap: 0.4rem; padding: 1.1rem 1.25rem 1.2rem; color: inherit; }
+  .signup-result { margin-top: 2rem; max-width: 40rem; }
+  .signup-quote { padding: 1.4rem 1.5rem 1.6rem; }
 
-  .flow { margin-top: 2rem; display: grid; gap: 0; }
-  .flow-step { position: relative; display: grid; grid-template-columns: 2rem minmax(0, 1fr); gap: 0.9rem; padding-bottom: 1.75rem; }
-  .flow-step:not(:last-child)::before {
-    content: ""; position: absolute; left: 0.95rem; top: 2rem; bottom: 0; width: 2px; background: var(--border);
-  }
-  .flow-dot {
-    display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: 999px;
-    border: 2px solid var(--border-strong); font-size: 0.8rem; font-weight: 800; color: var(--primary-foreground);
-  }
-  .flow-step[data-state="done"] .flow-dot { background: var(--primary); border-color: var(--primary); }
-  .flow-step[data-state="current"] .flow-dot { border-color: var(--primary); box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 20%, transparent); }
-  .flow-step[data-state="todo"] { color: var(--muted-foreground); }
-  .flow-body { min-width: 0; padding-top: 0.3rem; }
-  .flow-body h3 { font-weight: 700; font-size: 1.05rem; letter-spacing: -0.01em; }
   .flow-quote { display: flex; flex-wrap: wrap; gap: 1.25rem 3rem; }
   .flow-calculating { display: flex; align-items: center; gap: 0.6rem; }
   .flow-spinner {

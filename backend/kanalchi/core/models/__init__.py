@@ -18,7 +18,7 @@ from kanalchi.core.models.taxonomy import (
     Thread,
     ThreadPost,
 )
-from kanalchi.core.models.tenant import Channel, TelegramAccount, Tenant
+from kanalchi.core.models.tenant import Channel, ChannelQuote, TelegramAccount, Tenant
 from kanalchi.core.models.users import PlatformAdmin, TenantMember, User
 
 __all__ = [
@@ -27,6 +27,7 @@ __all__ = [
     "TelegramAccount",
     "Tenant",
     "Channel",
+    "ChannelQuote",
     "Post",
     "Media",
     "PostLink",

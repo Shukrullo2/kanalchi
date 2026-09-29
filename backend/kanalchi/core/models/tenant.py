@@ -99,3 +99,23 @@ class Channel(TimestampMixin, Base):
 
     tenant: Mapped[Tenant] = relationship(back_populates="channel")
     account: Mapped[TelegramAccount | None] = relationship(back_populates="channels")
+
+
+class ChannelQuote(TimestampMixin, Base):
+    """What importing a public channel would cost, as anyone on the platform domain asked for it.
+
+    Not a tenant: pricing a channel reserves nothing, so the same username can be priced again
+    by anyone until the admin actually onboards it. One row per username, refreshed in place."""
+
+    __tablename__ = "channel_quotes"
+
+    id: Mapped[int] = pk()
+    username: Mapped[str] = mapped_column(String(64), unique=True)
+    title: Mapped[str] = mapped_column(String(255), default="")
+    participants_count: Mapped[int | None] = mapped_column(Integer)
+    # pending: the reader account is measuring it; done: `quote` is final; failed: nothing to show.
+    status: Mapped[str] = mapped_column(String(12), default="pending")
+    # billing.quote_for_posts(); source "web" (t.me/s page) until Telegram itself has answered.
+    quote: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    error: Mapped[str | None] = mapped_column(Text)
+    times_asked: Mapped[int] = mapped_column(Integer, default=1)

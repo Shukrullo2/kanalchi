@@ -18,6 +18,7 @@ from kanalchi.core.jobs import create_job_run
 from kanalchi.core.members import invite_member, list_members, remove_member
 from kanalchi.core.models import (
     Channel,
+    ChannelQuote,
     Dimension,
     JobRun,
     PlatformAdmin,
@@ -260,6 +261,27 @@ async def signups(db: AsyncSession = Depends(get_db)) -> list[dict]:
             "tenants": by_owner.get(u.id, []),
         }
         for u in users
+    ]
+
+
+@router.get("/quotes")
+async def quotes(db: AsyncSession = Depends(get_db)) -> list[dict]:
+    """Channels priced on the platform domain by anyone, newest first, with the full quote
+    (AI cost and margin included). The people behind them get in touch on Telegram."""
+    rows = (await db.scalars(select(ChannelQuote).order_by(ChannelQuote.updated_at.desc()).limit(200))).all()
+    return [
+        {
+            "username": r.username,
+            "title": r.title,
+            "participants_count": r.participants_count,
+            "status": r.status,
+            "quote": r.quote,
+            "error": r.error,
+            "times_asked": r.times_asked,
+            "created_at": r.created_at,
+            "updated_at": r.updated_at,
+        }
+        for r in rows
     ]
 
 

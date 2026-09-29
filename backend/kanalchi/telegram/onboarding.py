@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 from datetime import UTC, datetime
 
@@ -11,6 +12,7 @@ from telethon.errors import (
     ChannelPrivateError,
     FloodWaitError,
     InviteHashExpiredError,
+    UsernameInvalidError,
     UsernameNotOccupiedError,
 )
 from telethon.tl import functions
@@ -19,7 +21,7 @@ from telethon.tl import types as tl
 from kanalchi.core import storage
 from kanalchi.core.db import session_scope
 from kanalchi.core.logging import get_logger
-from kanalchi.core.models import Channel, TelegramAccount, Tenant
+from kanalchi.core.models import Channel, ChannelQuote, TelegramAccount, Tenant
 from kanalchi.core.redis import get_redis
 from kanalchi.core.settings import get_settings
 from kanalchi.text.slug import slugify
@@ -129,94 +131,107 @@ async def resolve_channel(
 PREVIEW_SAMPLE = 300
 
 
-def _set_preview(tenant: Tenant, state: str) -> None:
-    signup = {**((tenant.settings or {}).get("signup") or {}), "preview": state}
-    tenant.settings = {**(tenant.settings or {}), "signup": signup}
-
-
-async def mark_preview_failed(tenant_id: int) -> None:
-    async with session_scope() as db:
-        tenant = await db.get(Tenant, tenant_id)
-        if tenant is not None:
-            _set_preview(tenant, "failed")
-
-
-async def preview_channel(tenant_id: int) -> dict:
-    """Size up a channel that registered itself: subscribers and message count, read through any
-    active account without joining, so the sign-up page can quote the import. Fills the channel
-    row (but not its reader account: that is chosen when the admin starts the import)."""
-    from kanalchi.core.billing import quote_for_posts
-    from kanalchi.telegram.pool import get_pool
-
-    async with session_scope() as db:
-        tenant = await db.get(Tenant, tenant_id)
-        if tenant is None:
-            raise RuntimeError("tenant not found")
-        username = ((tenant.settings or {}).get("signup") or {}).get("username")
-        account_id = await db.scalar(
-            select(TelegramAccount.id).where(TelegramAccount.status == "active").order_by(TelegramAccount.id)
-        )
-    if not username or account_id is None:
-        log.info(
-            "signup.preview.skipped", tenant_id=tenant_id, has_username=bool(username), account=account_id
-        )
-        await mark_preview_failed(tenant_id)
-        return {"skipped": "no username" if not username else "no active account"}
-
-    pool = get_pool()
-    client = pool.client(account_id)
-    try:
-        async with pool.lock(account_id):
-            entity = await client.get_entity(username)
-            if not isinstance(entity, tl.Channel) or not entity.broadcast:
-                raise RuntimeError("the link does not point to a Telegram channel")
-            full = await client(functions.channels.GetFullChannelRequest(entity))
-            total = (await client.get_messages(entity, limit=0)).total
-            # A sample of recent posts gives the channel's own text length and how many posts
-            # carry text at all, which is what the price actually depends on.
-            sample = await client.get_messages(entity, limit=PREVIEW_SAMPLE)
-    except FloodWaitError as e:
-        raise RuntimeError(f"Telegram asked to wait {e.seconds}s (FloodWait); retry later") from e
-    except (UsernameNotOccupiedError, ChannelPrivateError, ValueError) as e:
-        raise RuntimeError(f"cannot resolve channel: {type(e).__name__}") from e
-
-    from kanalchi.jobs.pipeline import CHARS_PER_TOKEN
-
+async def _measure_with(client, username: str) -> dict:  # noqa: ANN001
+    entity = await client.get_entity(username)
+    if not isinstance(entity, tl.Channel) or not entity.broadcast:
+        raise ValueError("not a Telegram channel")
+    full = await client(functions.channels.GetFullChannelRequest(entity))
+    total = (await client.get_messages(entity, limit=0)).total
+    # A sample of recent posts gives the channel's own text length and how many posts carry
+    # text at all, which is what the price actually depends on.
+    sample = await client.get_messages(entity, limit=PREVIEW_SAMPLE)
     texts = [len(m.message or "") for m in sample if m is not None and not getattr(m, "action", None)]
     with_text = [n for n in texts if n > 0]
-    avg_tokens = (sum(with_text) / len(with_text) / CHARS_PER_TOKEN) if with_text else None
-    text_share = (len(with_text) / len(texts)) if texts else None
+    return {
+        "title": entity.title or "",
+        "participants_count": full.full_chat.participants_count,
+        "total": total,
+        "avg_chars": (sum(with_text) / len(with_text)) if with_text else None,
+        "text_share": (len(with_text) / len(texts)) if texts else None,
+    }
+
+
+async def measure_channel(username: str) -> dict:
+    """Size up a public channel for a sign-up quote through a reader account, without joining.
+
+    Every connected account is tried in turn, so one in a FloodWait (or busy with a long
+    backfill) does not fail the quote. Whatever happens, the quote row ends up done or failed:
+    a web-preview estimate already on it stays as the answer when Telegram cannot be asked."""
+    from kanalchi.core.billing import quote_for_posts, quote_report
+    from kanalchi.jobs.pipeline import CHARS_PER_TOKEN
+    from kanalchi.telegram.pool import get_pool
+
+    pool = get_pool()
+    async with session_scope() as db:
+        active = (
+            await db.scalars(
+                select(TelegramAccount.id)
+                .where(TelegramAccount.status == "active")
+                .order_by(TelegramAccount.id)
+            )
+        ).all()
+    account_ids = [a for a in active if a in pool.accounts]
+
+    measured: dict | None = None
+    errors: list[str] = []
+    for account_id in account_ids:
+        try:
+            # A short wait for the lock: a backfill chunk may be holding it for minutes.
+            lock = pool.lock(account_id)
+            await asyncio.wait_for(lock.acquire(), timeout=90)
+            try:
+                measured = await _measure_with(pool.client(account_id), username)
+            finally:
+                lock.release()
+            break
+        except (UsernameNotOccupiedError, UsernameInvalidError, ChannelPrivateError, ValueError) as e:
+            errors.append(f"not a public channel ({type(e).__name__})")
+            break  # another account will not see it either
+        except FloodWaitError as e:
+            errors.append(f"account {account_id}: FloodWait {e.seconds}s")
+        except Exception as e:  # noqa: BLE001
+            errors.append(f"account {account_id}: {type(e).__name__}: {str(e)[:120]}")
+    if not account_ids:
+        errors.append("no connected reader account")
 
     async with session_scope() as db:
-        tenant = await db.get(Tenant, tenant_id)
-        assert tenant is not None
-        existing = await db.scalar(select(Channel).where(Channel.tg_channel_id == entity.id))
-        if existing and existing.tenant_id != tenant_id:
-            raise RuntimeError(f"channel already belongs to tenant {existing.tenant_id}")
-        ch = existing or await db.scalar(select(Channel).where(Channel.tenant_id == tenant_id))
-        if ch is None:
-            ch = Channel(tenant_id=tenant_id, tg_channel_id=entity.id)
-            db.add(ch)
-        ch.tg_channel_id = entity.id
-        ch.username = entity.username
-        ch.title = entity.title or ""
-        ch.about = full.full_chat.about
-        ch.participants_count = full.full_chat.participants_count
-        ch.backfill_total_estimate = total
-        ch.noforwards = bool(getattr(entity, "noforwards", False))
-        if not tenant.title:
-            tenant.title = entity.title or ""
-        tenant.onboarding_quote = quote_for_posts(
-            total, source="telegram", avg_post_tokens=avg_tokens, text_share=text_share
-        )
-        _set_preview(tenant, "done")
-        out = {
-            "tg_channel_id": entity.id,
-            "title": ch.title,
-            "total": total,
-            "quote": tenant.onboarding_quote,
-        }
-    log.info("signup.preview.done", tenant_id=tenant_id, total=total)
+        row = await db.scalar(select(ChannelQuote).where(ChannelQuote.username == username))
+        if row is None:
+            return {"skipped": "quote row gone"}
+        before = (row.quote or {}).get("price_uzs")
+        if measured is not None:
+            row.title = measured["title"] or row.title
+            row.participants_count = measured["participants_count"] or row.participants_count
+            avg = measured["avg_chars"]
+            row.quote = quote_for_posts(
+                measured["total"],
+                source="telegram",
+                avg_post_tokens=avg / CHARS_PER_TOKEN if avg else None,
+                text_share=measured["text_share"],
+            )
+            row.status, row.error = "done", None
+        else:
+            row.status = "done" if row.quote else "failed"
+            row.error = "; ".join(errors)[:500]
+        out = {"username": username, "status": row.status, "error": row.error}
+        # Follow up on the report the API sent: only when Telegram changed the price, or nothing
+        # could be measured at all.
+        report = None
+        if measured is not None and row.quote["price_uzs"] != before:
+            report = quote_report(
+                username, row.title, row.participants_count, row.quote, "Measured by Telegram"
+            )
+        elif row.status == "failed":
+            report = quote_report(username, row.title, row.participants_count, None, "Could not price")
+            report += f"\n⚠️ {row.error}"
+    if report:
+        from kanalchi.jobs.periodic import _alert_admins
+
+        try:
+            await _alert_admins(report)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("signup.quote.report_failed", error=str(exc)[:200])
+    log.info("signup.quote.measured", **out, measured=measured is not None)
     return out
 
 

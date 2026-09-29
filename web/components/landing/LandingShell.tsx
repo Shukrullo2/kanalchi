@@ -1,8 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { LocaleSwitch } from "@/components/LocaleSwitch";
-import { SignOut } from "@/components/SignOut";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { getMe } from "@/lib/auth";
 
 /** The example channel the landing page points at as proof. */
 export const EXAMPLE_HOST = "the-bakiroo.uz";
@@ -10,20 +8,18 @@ export const EXAMPLE_URL = `https://${EXAMPLE_HOST}`;
 
 /**
  * Header, footer and page frame shared by the landing page and the sign-up pages on the
- * platform domain. The header's right-hand button is "get started" for a visitor and the
- * signed-in name plus sign-out for a blogger who already registered.
+ * platform domain. The header's right-hand button is always "get started": pricing a channel
+ * needs no account.
  */
 export async function LandingShell({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [t, common, me] = await Promise.all([
+  const [t, common] = await Promise.all([
     getTranslations("landing"),
     getTranslations("common"),
-    getMe(),
   ]);
-  const signedIn = me.authenticated && me.role === "user";
 
   return (
     <div className="landing">
@@ -39,21 +35,9 @@ export async function LandingShell({
             <div className="ml-auto flex items-center gap-1.5">
               <LocaleSwitch />
               <ThemeToggle label={common("theme")} />
-              {signedIn ? (
-                <>
-                  <a
-                    href="/start"
-                    className="btn-ghost ml-1 hidden h-9 px-3 text-sm sm:inline-flex"
-                  >
-                    {me.name}
-                  </a>
-                  <SignOut label={common("signOut")} />
-                </>
-              ) : (
-                <a href="/start" className="btn-primary ml-1 h-9 px-4 text-sm">
-                  {t("ctaStart")}
-                </a>
-              )}
+              <a href="/start" className="btn-primary ml-1 h-9 px-4 text-sm">
+                {t("ctaStart")}
+              </a>
             </div>
           </header>
         </div>

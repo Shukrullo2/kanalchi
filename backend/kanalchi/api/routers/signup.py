@@ -1,34 +1,41 @@
-"""Self-serve sign-up on the platform domain: a blogger signs in with Telegram, adds their
-channel, sees what the import costs, picks a plan and asks to be onboarded. The admin takes
-it from there (payment by hand, then the import), and this API reports progress back."""
+"""Pricing a channel on the platform domain, open to anyone: type a channel's username, see what
+importing it costs, then message the admin. Nothing is reserved by asking: no tenant, no slug,
+no domain. The admin creates the tenant when the channel is actually onboarded."""
 
 from __future__ import annotations
 
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from kanalchi.api.auth import SessionData
-from kanalchi.api.deps import enforce_same_origin, get_db, require_user
+from kanalchi.api.deps import enforce_same_origin, get_db
 from kanalchi.core import billing
+from kanalchi.core.limits import check_quote_rate, reader_quote_allowed
 from kanalchi.core.logging import get_logger
-from kanalchi.core.models import Channel, Post, Tenant, TenantMember
-from kanalchi.core.settings import get_settings
+from kanalchi.core.models import Channel, ChannelQuote, Tenant
 from kanalchi.text.slug import slugify
 
 log = get_logger(__name__)
 
 router = APIRouter(prefix="/api/signup", tags=["signup"])
-# The signed-in part; it is mounted under `router`, so no prefix of its own.
-mine = APIRouter(dependencies=[Depends(require_user), Depends(enforce_same_origin)])
 
 # @name, t.me/name, https://telegram.me/name/ — a public channel username, nothing else.
-_USERNAME = re.compile(r"^(?:https?://)?(?:(?:www\.)?(?:t|telegram)\.me/|@)?([A-Za-z][A-Za-z0-9_]{3,31})/?$")
+_USERNAME = re.compile(
+    r"^(?:https?://)?(?:(?:www\.)?(?:t|telegram)\.me/(?:s/)?|@)?([A-Za-z][A-Za-z0-9_]{3,31})/?$"
+)
+
+# A measured quote is reused this long before Telegram is asked again.
+QUOTE_FRESH = timedelta(days=7)
+# The reader account answers within seconds unless its queue is busy; past this, the page stops
+# waiting and shows what it has (the web estimate) or offers a retry.
+MEASURE_PATIENCE = timedelta(minutes=3)
+# Tenant states in which a channel is really on the platform (onboarding is still just a draft).
+ONBOARDED = ("backfilling", "indexing", "active", "paused", "error")
 
 
 def parse_channel_username(link: str) -> str | None:
@@ -52,259 +59,155 @@ async def plans() -> dict:
     }
 
 
-class ChannelIn(BaseModel):
+class QuoteIn(BaseModel):
     link: str = Field(min_length=4, max_length=200)
 
 
-class ChannelPatch(BaseModel):
-    plan: str | None = Field(default=None, pattern="^(archive|basic|premium)$")
-    # The blogger's own guess at the archive size, used until Telegram has been asked.
-    posts_estimate: int | None = Field(default=None, ge=1, le=2_000_000)
-    # Skip proving ownership through the bot; the admin then checks by hand.
-    skip_verify: bool | None = None
-
-
-async def _mine(db: AsyncSession, user: SessionData, tenant_id: int) -> Tenant:
-    tenant = await db.get(Tenant, tenant_id)
-    if tenant is None or tenant.owner_user_id != user.user_id or tenant.status == "archived":
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "channel not found")
-    return tenant
-
-
-async def _out(db: AsyncSession, tenant: Tenant, user: SessionData) -> dict[str, Any]:
-    s = get_settings()
-    channel = await db.scalar(select(Channel).where(Channel.tenant_id == tenant.id))
-    member = await db.scalar(
-        select(TenantMember).where(TenantMember.tenant_id == tenant.id, TenantMember.user_id == user.user_id)
-    )
-    imported = 0
-    if channel is not None and tenant.status in {"backfilling", "indexing", "active"}:
-        imported = (
-            await db.scalar(select(func.count()).select_from(Post).where(Post.channel_id == channel.id)) or 0
-        )
-    signup = (tenant.settings or {}).get("signup") or {}
-    quote = tenant.onboarding_quote
-    if quote and "price_uzs" not in quote:
-        # Quoted before prices moved to soums: price it again from the same count.
-        quote = tenant.onboarding_quote = billing.quote_for_posts(
-            quote["posts"], source=quote.get("source", "manual"), avg_post_tokens=quote.get("avg_post_tokens")
-        )
+def _quote_out(row: ChannelQuote, *, now: datetime | None = None) -> dict[str, Any]:
+    now = now or datetime.now(UTC)
+    state = row.status
+    if state == "pending" and now - row.updated_at > MEASURE_PATIENCE:
+        # The measuring job never answered (worker down, queue busy): do not spin forever.
+        state = "done" if row.quote else "failed"
     return {
-        "id": tenant.id,
-        "slug": tenant.slug,
-        "domain": tenant.domain,
-        "url": s.public_url(tenant.domain),
-        "title": tenant.title or (channel.title if channel else "") or signup.get("username", ""),
-        "status": tenant.status,
-        "plan": tenant.plan,
-        "plan_monthly_uzs": billing.plan_price_uzs(tenant.plan),
-        "subscription_status": tenant.subscription_status,
-        "subscription_paid_until": tenant.subscription_paid_until,
-        "onboarding_paid_at": tenant.onboarding_paid_at,
-        "quote": billing.public_quote(quote),
-        # pending: Telegram is being asked for the size; failed: ask the blogger instead.
-        "preview_status": signup.get("preview", "pending" if tenant.onboarding_quote is None else "done"),
-        "requested_at": signup.get("requested_at"),
-        "verified": bool(member and member.verified_admin_at),
-        "verify_skipped": bool(signup.get("verify_skipped")),
-        "channel": {
-            "username": (channel.username if channel else None) or signup.get("username"),
-            "title": channel.title if channel else None,
-            "participants_count": channel.participants_count if channel else None,
-            "posts_estimate": channel.backfill_total_estimate if channel else None,
-            "resolved": channel is not None,
-        },
-        "progress": {
-            "imported": imported,
-            "total": channel.backfill_total_estimate if channel else None,
-            "backfill_status": channel.backfill_status if channel else None,
-        },
-        "created_at": tenant.created_at,
+        "username": row.username,
+        "title": row.title,
+        "participants_count": row.participants_count,
+        # pending: Telegram is measuring it (a web estimate may already be in `quote`);
+        # done: final; failed: nothing could be measured, the page offers a retry.
+        "status": state,
+        "quote": billing.public_quote(row.quote),
     }
 
 
-@mine.get("/channels")
-async def my_channels(
-    user: SessionData = Depends(require_user), db: AsyncSession = Depends(get_db)
-) -> list[dict]:
-    rows = (
-        await db.scalars(
-            select(Tenant)
-            .where(Tenant.owner_user_id == user.user_id, Tenant.status != "archived")
-            .order_by(Tenant.created_at.desc())
+async def _onboarded(db: AsyncSession, username: str) -> Tenant | None:
+    return await db.scalar(
+        select(Tenant)
+        .outerjoin(Channel, Channel.tenant_id == Tenant.id)
+        .where(
+            or_(Tenant.slug == slugify(username), Channel.username.ilike(username)),
+            Tenant.status.in_(ONBOARDED),
         )
-    ).all()
-    return [await _out(db, t, user) for t in rows]
+        .limit(1)
+    )
 
 
-@mine.post("/channels", status_code=201)
-async def add_channel(
-    body: ChannelIn, user: SessionData = Depends(require_user), db: AsyncSession = Depends(get_db)
+async def _web_estimate(row: ChannelQuote) -> bool:
+    """Price the channel from its t.me/s page, right now. False when it has no web preview."""
+    from kanalchi.jobs.pipeline import CHARS_PER_TOKEN
+    from kanalchi.telegram.webpreview import fetch_web_preview
+
+    web = await fetch_web_preview(row.username)
+    if web is None:
+        return False
+    row.title = web["title"] or row.title
+    row.participants_count = web["participants_count"] or row.participants_count
+    # Never replace a figure Telegram itself measured with the rougher web one.
+    if (row.quote or {}).get("source") != "telegram":
+        avg = web["avg_chars"]
+        row.quote = billing.quote_for_posts(
+            web["total"],
+            source="web",
+            avg_post_tokens=avg / CHARS_PER_TOKEN if avg else None,
+            text_share=web["text_share"],
+        )
+    return True
+
+
+@router.post("/quote", dependencies=[Depends(enforce_same_origin)])
+async def quote_channel(
+    body: QuoteIn, request: Request, background: BackgroundTasks, db: AsyncSession = Depends(get_db)
 ) -> dict:
-    s = get_settings()
+    """Price a public channel. Asking again for a channel whose quote failed or went stale starts
+    over, which is also what the page's retry button does."""
     username = parse_channel_username(body.link)
     if username is None:
         raise HTTPException(400, "send a public channel link or @username (private channels: contact us)")
-    slug = slugify(username)
-    domain = f"{slug}.{s.tenant_base_domain}"
-
-    existing = await db.scalar(select(Tenant).where((Tenant.slug == slug) | (Tenant.domain == domain)))
-    if existing is not None:
-        if existing.owner_user_id == user.user_id and existing.status != "archived":
-            return await _out(db, existing, user)
+    tenant = await _onboarded(db, username)
+    if tenant is not None:
         raise HTTPException(409, "this channel is already on the platform")
-
-    info = None
-    if s.platform_bot_token:
-        from kanalchi.telegram.verify import public_channel_info
-
-        info = await public_channel_info(s.platform_bot_token, username)
-        if info is None:
-            raise HTTPException(400, "that username is not a public Telegram channel")
-        taken = await db.scalar(
-            select(Channel.tenant_id).where(Channel.tg_channel_id == info["tg_channel_id"])
+    limit = await check_quote_rate(request.client.host if request.client else None)
+    if not limit.allowed:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "too many channels priced in a short time, try again later",
+            headers={"Retry-After": str(limit.retry_after_s or 3600)},
         )
-        if taken is not None:
-            raise HTTPException(409, "this channel is already on the platform")
 
-    tenant = Tenant(
-        slug=slug,
-        domain=domain,
-        title=(info or {}).get("title") or "",
-        status="onboarding",
-        owner_user_id=user.user_id,
-        source="self",
-        domain_verified_at=datetime.now(UTC),
-        settings={
-            "auto_domain": True,
-            "signup": {"username": username, "link": body.link.strip(), "preview": "pending"},
-        },
+    now = datetime.now(UTC)
+    row = await db.scalar(select(ChannelQuote).where(ChannelQuote.username == username))
+    if row is not None:
+        out = _quote_out(row, now=now)
+        fresh = (
+            row.quote
+            and row.quote.get("source") == "telegram"
+            and (now - datetime.fromisoformat(row.quote["computed_at"]) < QUOTE_FRESH)
+        )
+        if fresh or out["status"] == "pending":
+            row.times_asked += 1
+            background.add_task(_notify, _report(row, f"Priced again ({row.times_asked}×)"))
+            return out
+
+    first = row is None
+    if row is None:
+        row = ChannelQuote(username=username, times_asked=1)
+        db.add(row)
+    else:
+        row.times_asked += 1
+    row.status, row.error = "pending", None
+    row.updated_at = now
+    has_web = await _web_estimate(row)
+    # Committed before the job is queued: the worker picks it up at once and must find the row.
+    await db.commit()
+
+    deferred = False
+    if await reader_quote_allowed():
+        try:
+            from kanalchi.jobs import telegram_jobs
+
+            await telegram_jobs.channel_quote.defer_async(username=username)
+            deferred = True
+        except Exception as exc:  # noqa: BLE001
+            log.warning("signup.quote.defer_failed", username=username, error=str(exc)[:200])
+    if not deferred:
+        row.status = "done" if row.quote else "failed"
+        row.error = None if row.quote else "the reader account is not available"
+    if not has_web and not deferred:
+        row.error = "no public web preview and the reader account is not available"
+
+    background.add_task(
+        _notify, _report(row, "New channel priced" if first else f"Priced again ({row.times_asked}×)")
     )
-    db.add(tenant)
-    await db.flush()
-    db.add(TenantMember(tenant_id=tenant.id, user_id=user.user_id, role="owner"))
-    if info is not None:
-        db.add(
-            Channel(
-                tenant_id=tenant.id,
-                tg_channel_id=info["tg_channel_id"],
-                username=username,
-                title=info["title"],
-                about=info["about"],
-                participants_count=info["participants_count"],
-            )
+    log.info("signup.quote", username=username, status=row.status, web=has_web, deferred=deferred)
+    return _quote_out(row, now=now)
+
+
+@router.get("/quote/{username}")
+async def get_quote(username: str, db: AsyncSession = Depends(get_db)) -> dict:
+    row = await db.scalar(select(ChannelQuote).where(ChannelQuote.username == username.lower()))
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "this channel has not been priced")
+    return _quote_out(row)
+
+
+def _report(row: ChannelQuote, note: str) -> str:
+    """Every ask is reported (the visitor is anonymous; the channel is the lead to contact)."""
+    return (
+        billing.quote_report(row.username, row.title, row.participants_count, row.quote, note)
+        + (
+            "\n(Telegram is still measuring; a follow-up comes if the price changes)"
+            if row.status == "pending"
+            else ""
         )
-    await db.flush()
-
-    # Size and price the archive through a reader account; the page polls for the result.
-    try:
-        from kanalchi.jobs import telegram_jobs
-
-        await telegram_jobs.channel_preview.defer_async(tenant_id=tenant.id)
-    except Exception as exc:  # noqa: BLE001
-        log.warning("signup.preview.defer_failed", tenant_id=tenant.id, error=str(exc)[:200])
-        tenant.settings = {**tenant.settings, "signup": {**tenant.settings["signup"], "preview": "failed"}}
-    await _notify(f"New channel registered: @{username} by {user.name} (tg {user.tg_user_id}) → {domain}")
-    log.info("signup.channel_added", tenant_id=tenant.id, username=username, user_id=user.user_id)
-    return await _out(db, tenant, user)
-
-
-@mine.get("/channels/{tenant_id}")
-async def get_channel(
-    tenant_id: int, user: SessionData = Depends(require_user), db: AsyncSession = Depends(get_db)
-) -> dict:
-    return await _out(db, await _mine(db, user, tenant_id), user)
-
-
-@mine.patch("/channels/{tenant_id}")
-async def patch_channel(
-    tenant_id: int,
-    body: ChannelPatch,
-    user: SessionData = Depends(require_user),
-    db: AsyncSession = Depends(get_db),
-) -> dict:
-    tenant = await _mine(db, user, tenant_id)
-    if body.posts_estimate is not None:
-        measured = (tenant.onboarding_quote or {}).get("source") == "telegram"
-        if not measured:
-            channel = await db.scalar(select(Channel).where(Channel.tenant_id == tenant.id))
-            if channel is not None:
-                channel.backfill_total_estimate = body.posts_estimate
-            tenant.onboarding_quote = billing.quote_for_posts(body.posts_estimate, source="manual")
-    if body.skip_verify is not None:
-        signup = {**((tenant.settings or {}).get("signup") or {}), "verify_skipped": body.skip_verify}
-        tenant.settings = {**(tenant.settings or {}), "signup": signup}
-    if body.plan is not None:
-        if tenant.subscription_status == "active":
-            raise HTTPException(409, "the plan of a live channel is changed by the admin")
-        tenant.plan = body.plan
-    return await _out(db, tenant, user)
-
-
-@mine.post("/channels/{tenant_id}/verify")
-async def verify_owner(
-    tenant_id: int, user: SessionData = Depends(require_user), db: AsyncSession = Depends(get_db)
-) -> dict:
-    """Ask Telegram whether the signed-in user administers the channel. Needs the platform bot to
-    have been added to the channel, which is also what lets it post there later."""
-    s = get_settings()
-    tenant = await _mine(db, user, tenant_id)
-    channel = await db.scalar(select(Channel).where(Channel.tenant_id == tenant.id))
-    if not s.platform_bot_token or channel is None:
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "verification is not available yet")
-    from kanalchi.telegram.verify import is_channel_admin
-
-    ok = await is_channel_admin(s.platform_bot_token, channel.tg_channel_id, user.tg_user_id)
-    if ok:
-        member = await db.scalar(
-            select(TenantMember).where(
-                TenantMember.tenant_id == tenant.id, TenantMember.user_id == user.user_id
-            )
-        )
-        if member is None:
-            member = TenantMember(tenant_id=tenant.id, user_id=user.user_id, role="owner")
-            db.add(member)
-        member.verified_admin_at = datetime.now(UTC)
-        # Proven once; the studio on the channel's own domain will not ask Telegram again.
-        member.invited = True
-    return {"verified": ok}
-
-
-@mine.post("/channels/{tenant_id}/request")
-async def request_onboarding(
-    tenant_id: int, user: SessionData = Depends(require_user), db: AsyncSession = Depends(get_db)
-) -> dict:
-    """Quote seen: ask the admin to take the import payment and start the import. The first
-    month of hosting is free; the plan for the months after is agreed with the admin, so a
-    self-registered channel starts on basic (live updates, no writing tools) unless changed."""
-    tenant = await _mine(db, user, tenant_id)
-    if tenant.onboarding_quote is None:
-        raise HTTPException(400, "the archive has not been sized yet")
-    if tenant.plan is None:
-        tenant.plan = "basic"
-    if tenant.subscription_status == "none":
-        tenant.subscription_status = "pending"
-    signup = {**((tenant.settings or {}).get("signup") or {}), "requested_at": datetime.now(UTC).isoformat()}
-    tenant.settings = {**(tenant.settings or {}), "signup": signup}
-    quote = tenant.onboarding_quote
-    await _notify(
-        f"Onboarding requested: @{signup.get('username')} ({tenant.domain})\n"
-        f"import {quote.get('price_uzs')} UZS for {quote.get('posts')} posts "
-        f"(AI ≈ ${quote.get('ai_usd')}, margin {quote.get('margin_uzs')} UZS); first month of hosting free, "
-        f"then plan {tenant.plan} ({billing.plan_price_uzs(tenant.plan)} UZS/mo)\n"
-        f"by {user.name} (tg {user.tg_user_id}" + (f", @{user.username}" if user.username else "") + ")"
+        + (f"\n⚠️ {row.error}" if row.error else "")
     )
-    return await _out(db, tenant, user)
 
 
 async def _notify(message: str) -> None:
-    """Tell the admins on Telegram; a failure here must never fail the sign-up."""
+    """Tell the admins on Telegram; a failure here must never fail the quote."""
     try:
         from kanalchi.jobs.periodic import _alert_admins
 
         await _alert_admins(message)
     except Exception as exc:  # noqa: BLE001
         log.warning("signup.notify_failed", error=str(exc)[:200])
-
-
-router.include_router(mine)

@@ -74,6 +74,18 @@ async def check_chat_rate(tenant_id: int, *, ip: str | None, visitor_id: str | N
     return LimitResult(True)
 
 
+async def check_quote_rate(ip: str | None) -> LimitResult:
+    """Pricing a channel is open to anyone on the platform domain; this keeps one visitor from
+    turning it into a way to drive the reader account."""
+    return await _sliding(f"rl:quote:ip:{ip_hash(ip)}:1h", 3600, 30)
+
+
+async def reader_quote_allowed() -> bool:
+    """A daily cap on channels measured through the reader account (each one is a username
+    lookup, which Telegram rate-limits per account). Past it, quotes come from the web preview."""
+    return (await _sliding("rl:quote:reader:day", 86400, 150)).allowed
+
+
 def _budget_key(tenant_id: int, kind: str) -> str:
     return f"budget:{tenant_id}:{kind}:{datetime.now(UTC):%Y-%m-%d}"
 

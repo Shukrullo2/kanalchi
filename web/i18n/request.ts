@@ -8,15 +8,14 @@ function pick(candidate: string | undefined | null): Locale | null {
   return (LOCALES as readonly string[]).includes(short) ? (short as Locale) : null;
 }
 
+/** The visitor's own choice (the locale switch sets the cookie), else the channel's language,
+ * else Uzbek. The browser's Accept-Language is deliberately ignored: the audience is in
+ * Uzbekistan, and many of their browsers are set to English or Russian. */
 export default getRequestConfig(async () => {
   const c = await cookies();
   const h = await headers();
   const fromCookie = pick(c.get("locale")?.value);
   const fromTenant = pick(h.get("x-tenant-lang"));
-  const fromAccept = (h.get("accept-language") ?? "")
-    .split(",")
-    .map((s) => pick(s.trim().split(";")[0]))
-    .find(Boolean) ?? null;
-  const locale = fromCookie ?? fromTenant ?? fromAccept ?? DEFAULT_LOCALE;
+  const locale = fromCookie ?? fromTenant ?? DEFAULT_LOCALE;
   return { locale, messages: (await import(`../messages/${locale}.json`)).default };
 });

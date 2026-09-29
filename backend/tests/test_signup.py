@@ -15,6 +15,7 @@ from kanalchi.core.settings import get_settings
     [
         ("@the_bakiroo", "the_bakiroo"),
         ("https://t.me/The_Bakiroo/", "the_bakiroo"),
+        ("https://t.me/s/the_bakiroo", "the_bakiroo"),  # the web preview link
         ("t.me/abc_1", "abc_1"),
         ("telegram.me/abc_1", "abc_1"),
         ("abc_1", "abc_1"),
@@ -72,3 +73,48 @@ def test_catalogue_lists_three_plans_in_ascending_price() -> None:
     assert prices == sorted(prices) == [90_000, 120_000, 150_000]
     assert billing.plan_price_uzs("basic") == prices[1]
     assert billing.plan_price_uzs(None) is None
+
+
+_PAGE = """
+<meta property="og:title" content="bakiroo &amp; co">
+<div class="tgme_channel_info_counter"><span class="counter_value">60.3K</span> <span class="counter_type">subscribers</span></div>
+<div class="tgme_widget_message text_not_supported_wrap js-widget_message" data-post="the_bakiroo/13392">
+  <div class="tgme_widget_message_text js-message_text" dir="auto">Hello <b>world</b><br/>again &amp; more</div>
+</div>
+<div class="tgme_widget_message js-widget_message" data-post="the_bakiroo/13393">
+  <a class="tgme_widget_message_photo_wrap"></a>
+</div>
+<div class="tgme_widget_message js-widget_message" data-post="the_bakiroo/13394">
+  <div class="tgme_widget_message_reply"><div class="tgme_widget_message_metatext js-message_reply_text">quoted</div></div>
+  <div class="tgme_widget_message_text js-message_text" dir="auto">abc</div>
+</div>
+"""
+
+
+def test_web_preview_page_gives_ids_text_lengths_and_header() -> None:
+    from kanalchi.telegram.webpreview import parse_count, parse_page
+
+    page = parse_page(_PAGE)
+    assert page["posts"] == {13392: len("Hello world\nagain & more"), 13393: 0, 13394: 3}
+    assert page["title"] == "bakiroo & co"
+    assert page["participants_count"] == 60_300
+    assert parse_count("1.2M") == 1_200_000 and parse_count("812") == 812 and parse_count("?") is None
+
+
+def test_a_quote_nobody_answers_stops_spinning() -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from kanalchi.api.routers.signup import MEASURE_PATIENCE, _quote_out
+    from kanalchi.core.models import ChannelQuote
+
+    now = datetime.now(UTC)
+    row = ChannelQuote(username="abcd", title="", status="pending", quote=None, updated_at=now)
+    assert _quote_out(row, now=now)["status"] == "pending"
+    late = now + MEASURE_PATIENCE + timedelta(seconds=1)
+    # Nothing measured at all: the page offers a retry.
+    assert _quote_out(row, now=late)["status"] == "failed"
+    # A web estimate is there: it becomes the answer.
+    row.quote = billing.quote_for_posts(500, source="web")
+    out = _quote_out(row, now=late)
+    assert out["status"] == "done" and out["quote"]["source"] == "web"
+    assert "ai_usd" not in out["quote"]
