@@ -73,8 +73,15 @@ main() {
   for i in $(seq 1 60); do
     if [[ "$("${dc[@]}" ps api --format '{{.Health}}' 2>/dev/null)" == "healthy" ]]; then
       echo "deploy: api healthy on $(git rev-parse --short HEAD) ($compose)"
+      # The finished one-off containers (migrate) still reference the replaced images, and an
+      # image a container references cannot be removed: clear this project's stopped ones first.
+      # Before this, every deploy left ~1.7 GB behind until the disk filled (2026-09-29).
+      "${dc[@]}" rm -f >/dev/null 2>&1 || true
       local id
-      for id in $old_images; do docker image rm "$id" >/dev/null 2>&1 || true; done
+      for id in $old_images; do
+        docker image rm "$id" >/dev/null 2>&1 || echo "deploy: could not remove old image $id" >&2
+      done
+      df -h / | awk 'NR==2 {print "deploy: disk " $5 " used, " $4 " free"}'
       "${dc[@]}" ps --format 'table {{.Service}}\t{{.Status}}'
       return 0
     fi
