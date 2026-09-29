@@ -93,24 +93,31 @@ def caption_layer(text: str) -> Image.Image:
     return layer
 
 # ---- scenes -----------------------------------------------------------------------------
-def scene_frames(name: str, speed: float = 1.0, trim_start: float = 0.0, trim_end: float = 0.0, cap: float | None = None):
+def scene_frames(name: str, speed: float = 1.0, trim_start: float = 0.0, trim_end: float = 0.0, cap: float | None = None, segments=None):
+    """Output frames for a scene. `segments` cuts the recording to a few (start, end) windows in
+    scene seconds, a negative value counting from the end, so a long wait can be skipped."""
     d = os.path.join(HERE, "scenes", name)
     rows = [l.split() for l in open(os.path.join(d, "times.txt")) if l.strip()]
     times = [(int(t) / 1000.0, f) for t, f in rows]
-    t0 = times[0][0] + trim_start
-    t_end = times[-1][0] - trim_end
-    if cap is not None:
-        t_end = min(t_end, t0 + cap)
-    dur = (t_end - t0) / speed
-    n = int(dur * FPS)
-    j = 0
-    out = []
-    for k in range(n):
-        t = t0 + (k / FPS) * speed
-        while j + 1 < len(times) and times[j + 1][0] <= t:
-            j += 1
-        out.append((k / FPS, os.path.join(d, times[j][1])))
-    return out, dur
+    first, last = times[0][0], times[-1][0]
+    length = last - first
+    if segments is None:
+        t_end = last - trim_end
+        if cap is not None:
+            t_end = min(t_end, first + trim_start + cap)
+        segments = [(trim_start, t_end - first)]
+    windows = [(first + (a if a >= 0 else length + a), first + (b if b >= 0 else length + b)) for a, b in segments]
+    out, clock = [], 0.0
+    for a, b in windows:
+        n = int((b - a) / speed * FPS)
+        j = 0
+        for k in range(n):
+            t = a + (k / FPS) * speed
+            while j + 1 < len(times) and times[j + 1][0] <= t:
+                j += 1
+            out.append((clock + k / FPS, os.path.join(d, times[j][1])))
+        clock += n / FPS
+    return out, clock
 
 def load(path):
     im = Image.open(path).convert("RGB")
@@ -133,8 +140,8 @@ def play_card(wr, im, seconds, fade=0.6):
         f = min(1.0, t / fade, (seconds - t) / fade)
         wr.frame(im, max(0.0, f))
 
-def play_scene(wr, name, captions=(), speed=1.0, trim_start=0.0, trim_end=0.0, cap=None, fade_in=0.35, fade_out=0.35):
-    frames, dur = scene_frames(name, speed, trim_start, trim_end, cap)
+def play_scene(wr, name, captions=(), speed=1.0, trim_start=0.0, trim_end=0.0, cap=None, fade_in=0.35, fade_out=0.35, segments=None):
+    frames, dur = scene_frames(name, speed, trim_start, trim_end, cap, segments)
     last_path, im = None, None
     for t, path in frames:
         if path != last_path:
@@ -173,11 +180,13 @@ def main(out="demo.mp4"):
     play_scene(wr, "site_posts", [(0, 4.5, "Har bir post — alohida sahifa"), (4.5, None, "Rasmlar, havolalar, reaksiyalar — va har postda teglar")], speed=1.1)
     play_scene(wr, "site_tags", [(0, None, "Mavzular va shaxslar ko‘rsatkichi — sun’iy intellekt tuzgan")], speed=1.1)
     play_scene(wr, "site_search", [(0, None, "Lotin, kirill va rus tilida qidiruv, filtrlar bilan")], speed=1.1)
-    play_scene(wr, "site_chat", [(0, 5.0, "Arxivga oddiy tilda savol bering"), (5.0, None, "Javob kanalning o‘z postlariga tayanadi va ularga havola beradi")], speed=1.25, cap=42)
+    # The question being typed, then a cut to the finished answer: the assistant takes a minute or two.
+    play_scene(wr, "site_chat", [(0, 6.5, "Arxivga oddiy tilda savol bering"), (6.5, None, "Javob kanalning o‘z postlariga tayanadi va ularga havola beradi")],
+               segments=[(0, 8.0), (-16.0, 0)])
     play_scene(wr, "site_graph", [(0, None, "Kanal mavzulari qanday bog‘langani — xaritada")])
     play_scene(wr, "site_stories", [(0, None, "Bir-birini davom ettirgan postlar syujet bo‘ladi")], speed=1.1)
     play_scene(wr, "site_top", [(0, None, "Eng ko‘p o‘qilgan postlar — bir qarashda")], speed=1.1)
-    play_card(wr, card("Kanalingiz tarixini onlayn asarga aylantiring", "Telegram orqali kiring, kanalingizni qo‘shing, narxini ko‘ring. Birinchi oy hosting bepul.", kicker="Osor", foot="osor.uz/start"), 6.0, fade=0.8)
+    play_card(wr, card("Kanalingiz tarixini onlayn asarga aylantiring", "Kanal username’ini yozing, narxini shu zahoti ko‘ring — kirish shart emas. Birinchi oy hosting bepul.", kicker="Osor", foot="osor.uz/start"), 6.0, fade=0.8)
     wr.close()
     print("frames", wr.n, "≈", round(wr.n / FPS), "s")
 
