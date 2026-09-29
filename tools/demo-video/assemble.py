@@ -158,15 +158,11 @@ def main(out="demo.mp4"):
         (13.2, 17.4, "Siz faqat importga to‘laysiz (asosan AI xarajati). Birinchi oy hosting bepul."),
         (17.4, None, "Kanalni ulaymiz"),
     ], speed=1.1)
-    play_scene(wr, "signin", [
-        (0, 3.6, "Telegram orqali kiring — forma ham, parol ham yo‘q"),
-        (3.6, 8.5, "Kanalni qo‘shing: faqat @username kifoya"),
-        (8.5, None, "Telegramdan arxiv hajmi so‘raladi"),
-    ])
     play_scene(wr, "quote", [
-        (0, 4.5, "12 965 ta post o‘lchandi — bitta narx, so‘mda"),
-        (4.5, 9.0, "Siz faqat importga to‘laysiz; birinchi oy hosting bepul"),
-        (9.0, None, "To‘lov admin bilan Telegramda kelishiladi"),
+        (0, 4.0, "Kanal username’ini yozing — kirish shart emas"),
+        (4.0, 9.0, "Hajmi darhol hisoblanadi, keyin Telegramdan aniqlashtiriladi"),
+        (9.0, 15.5, "12 965 ta post — bitta narx, so‘mda. Birinchi oy hosting bepul"),
+        (15.5, None, "Keyingi qadam: adminga yozish, to‘lovdan keyin import boshlanadi"),
     ])
     play_card(wr, card("Bir necha soatdan so‘ng…", "Har bir post o‘qildi, teglandi va indekslandi. Kanal the-bakiroo.uz manzilida ishlamoqda.", kicker="Import ishlaydi", accent_last=False), 4.0)
     play_scene(wr, "site_home", [
@@ -177,7 +173,7 @@ def main(out="demo.mp4"):
     play_scene(wr, "site_posts", [(0, 4.5, "Har bir post — alohida sahifa"), (4.5, None, "Rasmlar, havolalar, reaksiyalar — va har postda teglar")], speed=1.1)
     play_scene(wr, "site_tags", [(0, None, "Mavzular va shaxslar ko‘rsatkichi — sun’iy intellekt tuzgan")], speed=1.1)
     play_scene(wr, "site_search", [(0, None, "Lotin, kirill va rus tilida qidiruv, filtrlar bilan")], speed=1.1)
-    play_scene(wr, "site_chat_idle", [(0, 3.0, "Arxivga oddiy tilda savol bering"), (3.0, None, "Javoblar kanalning o‘z postlariga tayanadi — o‘ylab topilgan narsa yo‘q")], speed=1.1)
+    play_scene(wr, "site_chat", [(0, 5.0, "Arxivga oddiy tilda savol bering"), (5.0, None, "Javob kanalning o‘z postlariga tayanadi va ularga havola beradi")], speed=1.25, cap=42)
     play_scene(wr, "site_graph", [(0, None, "Kanal mavzulari qanday bog‘langani — xaritada")])
     play_scene(wr, "site_stories", [(0, None, "Bir-birini davom ettirgan postlar syujet bo‘ladi")], speed=1.1)
     play_scene(wr, "site_top", [(0, None, "Eng ko‘p o‘qilgan postlar — bir qarashda")], speed=1.1)

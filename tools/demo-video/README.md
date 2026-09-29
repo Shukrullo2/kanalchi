@@ -4,11 +4,11 @@ Records the osor.uz funnel and the example channel with headless Chrome, then cu
 into a 1080p clip with Uzbek captions, title cards and a synthesised background track.
 
 - `rec.mjs` — one scene per run, frames + timestamps into `scenes/<name>/` (Node 20+, `--experimental-websocket`).
-- `stage.py` — stages the local database for the fake registration (`hold` / `quote` / `flow_id` / `cleanup`).
-- `run.sh` — records every scene in order; `run3.sh` re-records only the staged sign-in and quote scenes.
+- `stage.py` — stages the local database so the public form can price @the_bakiroo (`hold` parks the
+  local tenant, `finalize` stands in for the reader account's measurement, `cleanup` restores both).
+- `run.sh` — records every scene in order: the quote on the local stack, then the production pages.
 - `assemble.py` — cards, captions, encoding (`.venv` with imageio, imageio-ffmpeg, pillow, numpy).
 - `music.py` — the background bed, generated, so nothing needs a licence.
 
-Needs the local stack (`make api`, `make web`) with a platform-host dev session in `jar-demo`
-(`POST /api/auth/dev-login` on `osor.localhost` as "Bakiroo"), and the production sites reachable.
-The chat scene only shows an answer when the Anthropic account has credit.
+Needs the local stack (`make api`, `make web`) and the production sites reachable. The chat scene asks
+the live assistant a real question, which costs a few cents of Anthropic credit.

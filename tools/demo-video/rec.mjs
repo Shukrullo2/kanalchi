@@ -1,7 +1,10 @@
 // Scene recorder: drives headless Chrome over CDP and saves JPEG frames with timestamps.
 // usage: node --experimental-websocket rec.mjs <scene> [sid-cookie]
 import { spawn } from "node:child_process";
+import { execSync } from "node:child_process";
 import { mkdirSync, writeFileSync, appendFileSync } from "node:fs";
+const BACKEND = "/Users/user/Documents/blogger/backend";
+const SCRATCH = new URL(".", import.meta.url).pathname; // stage.py lives next to this file
 
 const [scene, sid] = process.argv.slice(2);
 const OUT = new URL(`./scenes/${scene}/`, import.meta.url).pathname;
@@ -120,30 +123,20 @@ const scenes = {
     await scrollBy(600, 1800);
     await clickText("Kanalim narxini", "a"); await sleep(900); stop();
   },
-  async signin() {
-    // Not signed in: the dev-only form is replaced by a Telegram-style button for the demo.
-    await goto(LOCAL + "/start"); await cosmetics();
-    await evaluate(`(() => { const form = document.querySelector('.landing-final form'); if (!form) return; const b = document.createElement('button'); b.id = 'tg-login';
-      b.textContent = 'Telegram orqali kirish'; Object.assign(b.style, { background: '#54a9eb', color: '#fff', border: 0, borderRadius: '999px', padding: '0.85rem 1.6rem', fontSize: '1.05rem', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '.6rem' });
-      b.insertAdjacentHTML('afterbegin', '<svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d="M9.04 15.47 8.8 19.2c.37 0 .53-.16.72-.35l1.73-1.66 3.59 2.63c.66.36 1.13.17 1.3-.61l2.36-11.06c.21-.98-.35-1.36-1-1.12L3.6 12.17c-.94.37-.93.9-.16 1.13l3.55 1.1 8.25-5.2c.39-.24.74-.11.45.13l-6.65 6.14Z"/></svg>');
-      form.replaceWith(b); })()`);
-    start(); await sleep(1800);
-    await click("#tg-login"); await sleep(500);
-    await send("Network.setCookie", { name: "sid", value: process.env.SID, domain: "osor.localhost", path: "/" });
-    await goto(LOCAL + "/start"); await cosmetics(); await sleep(1600);
-    await type("#channel-link", "@the_bakiroo", 90); await sleep(700);
-    await clickText("Qo‘shish"); await waitFor("document.querySelector('.flow')", 20000); await cosmetics(); await sleep(3500); stop();
-  },
   async quote() {
-    await goto(process.env.FLOW_URL); await cosmetics(); start(); await sleep(2600);
-    await scrollBy(250, 1400); await sleep(600);
-    await scrollToSel(".flow-summary", 1400); await sleep(1200);
-    await clickText("Ulashni so‘rash"); await waitFor("[...document.querySelectorAll('.chip')].some(c => c.textContent.includes('So‘rov yuborildi'))", 15000);
-    await cosmetics(); await sleep(1200);
+    // The public form: type the channel, see the price, message the admin. No sign-in.
+    await goto(LOCAL + "/start"); await cosmetics(); start(); await sleep(1800);
+    await type("#channel-link", "@the_bakiroo", 90); await sleep(600);
+    await clickText("Hisoblash", "button");
+    await waitFor("document.querySelector('.signup-quote')", 30000); await cosmetics(); await sleep(3200);
+    // Locally no reader account runs; stand in for its answer, and let the page's poll pick it up.
+    execSync(`cd ${BACKEND} && uv run python ${SCRATCH}/stage.py finalize`, { stdio: "ignore" });
+    await waitFor("document.body.innerText.includes('Telegramdan olingan')", 20000); await cosmetics(); await sleep(2200);
+    await scrollToSel(".flow-summary", 1400); await sleep(1600);
     // The admin's contact button needs CONTACT_URL, which the local stack does not set: draw it for the demo.
-    await evaluate(`(() => { const step = [...document.querySelectorAll('.flow-step')][3]; if (!step || step.querySelector('#contact-admin')) return;
-      const a = document.createElement('a'); a.id = 'contact-admin'; a.className = 'btn-ghost mt-3'; a.href = '#'; a.textContent = '✈ Adminga yozish'; a.onclick = (e) => e.preventDefault();
-      step.querySelector('.flow-body').appendChild(a); })()`);
+    await evaluate(`(() => { if (document.querySelector('#contact-admin')) return; const card = document.querySelector('.signup-quote');
+      const a = document.createElement('a'); a.id = 'contact-admin'; a.className = 'btn-primary mt-3'; a.href = '#'; a.textContent = '✈ Adminga yozish'; a.onclick = (e) => e.preventDefault();
+      card.appendChild(a); })()`);
     await scrollToSel("#contact-admin", 1200); await sleep(400);
     await click("#contact-admin"); await sleep(1800); stop();
   },
@@ -169,10 +162,12 @@ const scenes = {
   },
   async site_chat() {
     await goto(SITE + "/chat"); start(); await sleep(1800);
-    await type("form input.input-field", "What has the channel written about inflation lately?", 60);
+    await type("form input.input-field", "Inflyatsiya haqida oxirgi paytda nima yozgan?", 55);
     await click("form button.btn-primary");
-    await waitFor("document.querySelectorAll('a[href*=\"/post/\"]').length > 0", 50000); await sleep(5000);
-    await scrollBy(500, 2200); stop();
+    await waitFor("document.querySelectorAll('a[href*=\"/post/\"]').length > 0", 90000);
+    // Let the answer finish streaming: the ask button is enabled again once it has.
+    await waitFor("!document.querySelector('form button.btn-primary').disabled && document.querySelector('form input.input-field').value === ''", 90000);
+    await sleep(4000); await scrollBy(400, 2200); await sleep(800); stop();
   },
   async site_chat_idle() {
     // The assistant needs API credit to answer; until then the page is shown with a question typed.
