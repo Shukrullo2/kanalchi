@@ -49,6 +49,8 @@ main() {
     target="$(git rev-parse "$want")"
   fi
   echo "deploy: $(git rev-parse --short HEAD) -> $(git rev-parse --short "$target")"
+  local before
+  before="$(git rev-parse HEAD)"
   git checkout --quiet --force --detach "$target"
 
   local compose
@@ -62,10 +64,17 @@ main() {
     "${dc[@]}" up -d --remove-orphans
   fi
 
-  # A bind-mounted Caddyfile change does not recreate the container; reload it explicitly.
+  # The Caddyfile is bind-mounted as a single file, so a checkout that replaces it leaves the
+  # container reading the old inode: a reload would re-read stale content. Recreate the
+  # container when the file changed (a few seconds of edge downtime); reload otherwise.
   if [[ -n "$("${dc[@]}" ps -q caddy 2>/dev/null)" ]]; then
-    "${dc[@]}" exec -T caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1 \
-      && echo "deploy: caddy config reloaded" || echo "deploy: caddy reload failed" >&2
+    if ! git diff --quiet "$before" "$target" -- infra/Caddyfile; then
+      "${dc[@]}" up -d --force-recreate --no-deps caddy >/dev/null 2>&1 \
+        && echo "deploy: caddy recreated for the new Caddyfile" || echo "deploy: caddy recreate failed" >&2
+    else
+      "${dc[@]}" exec -T caddy caddy reload --config /etc/caddy/Caddyfile >/dev/null 2>&1 \
+        && echo "deploy: caddy config reloaded" || echo "deploy: caddy reload failed" >&2
+    fi
   fi
 
   # Wait for the API to answer before calling the deploy good.
