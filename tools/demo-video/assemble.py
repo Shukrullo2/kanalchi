@@ -106,10 +106,16 @@ def scene_frames(name: str, speed: float = 1.0, trim_start: float = 0.0, trim_en
         if cap is not None:
             t_end = min(t_end, first + trim_start + cap)
         segments = [(trim_start, t_end - first)]
-    windows = [(first + (a if a >= 0 else length + a), first + (b if b >= 0 else length + b)) for a, b in segments]
+    def at(x, end=False):
+        # Positive: seconds from the start. Negative: from the end. None (or 0 as an end): the end.
+        if x is None or (end and x == 0):
+            return last
+        return first + (x if x >= 0 else length + x)
+
+    windows = [(at(a), at(b, end=True)) for a, b in segments]
     out, clock = [], 0.0
     for a, b in windows:
-        n = int((b - a) / speed * FPS)
+        n = max(0, int((b - a) / speed * FPS))
         j = 0
         for k in range(n):
             t = a + (k / FPS) * speed
@@ -182,7 +188,7 @@ def main(out="demo.mp4"):
     play_scene(wr, "site_search", [(0, None, "Lotin, kirill va rus tilida qidiruv, filtrlar bilan")], speed=1.1)
     # The question being typed, then a cut to the finished answer: the assistant takes a minute or two.
     play_scene(wr, "site_chat", [(0, 6.5, "Arxivga oddiy tilda savol bering"), (6.5, None, "Javob kanalning o‘z postlariga tayanadi va ularga havola beradi")],
-               segments=[(0, 8.0), (-16.0, 0)])
+               segments=[(0, 8.0), (-16.0, None)])
     play_scene(wr, "site_graph", [(0, None, "Kanal mavzulari qanday bog‘langani — xaritada")])
     play_scene(wr, "site_stories", [(0, None, "Bir-birini davom ettirgan postlar syujet bo‘ladi")], speed=1.1)
     play_scene(wr, "site_top", [(0, None, "Eng ko‘p o‘qilgan postlar — bir qarashda")], speed=1.1)
